@@ -18,9 +18,10 @@ from stages.lib.member import (
     verify_page,
     verify_record,
 )
-from stages.lib.member.extractors.rule_based.dob import extract_dob
-from stages.lib.member.extractors.rule_based.member_id import extract_member_id
-from stages.lib.member.extractors.rule_based.name_common import (
+from stages.lib.extraction.staging import StagedPage
+from stages.lib.member import staged_page_fields
+from stages.lib.member.rules.field_match import dob_matches, member_id_matches
+from stages.lib.member.rules.name_common import (
     ALL_FULL,
     BOTH_FULL,
     INITIAL,
@@ -29,7 +30,6 @@ from stages.lib.member.extractors.rule_based.name_common import (
     TWO_FULL,
     classify_three_word_name,
     classify_two_word_name,
-    find_two_word_name,
     name_matches,
     tokenize,
 )
@@ -129,49 +129,35 @@ class TestThreeWordName:
         assert classify_three_word_name(span, "Justin", "Robert", "Anderson") == MISMATCH
 
 
-class TestFindNameOnPage:
-    def test_finds_name_after_a_label(self):
-        text = "Patient Name: Justin Anderson    DOB: 08/29/1954"
-        assert find_two_word_name(text, "Justin", "Anderson") == "Justin Anderson"
-
-    def test_returns_na_when_absent(self):
-        text = "Progress note. Vitals stable. No identifiers."
-        assert find_two_word_name(text, "Justin", "Anderson") == "N/A"
-
-
 # --- DOB and member id ------------------------------------------------------
 
 
-class TestDobExtraction:
+class TestDobMatch:
     @pytest.mark.parametrize(
-        "text",
-        [
-            "DOB: 08/29/1954",
-            "Date of Birth 8-29-1954",
-            "Birth date 1954 08 29",
-        ],
+        "value",
+        ["08/29/1954", "8-29-1954", "1954 08 29", "August 29, 1954"],
     )
-    def test_matches_parts_in_any_supported_order(self, text):
-        assert extract_dob(text, "08/29/1954") == "08/29/1954"
+    def test_matches_parts_in_any_supported_order(self, value):
+        assert dob_matches(value, "08/29/1954")
 
     def test_rejects_a_different_date(self):
-        assert extract_dob("DOB: 01/02/1970", "08/29/1954") == "N/A"
+        assert not dob_matches("01/02/1970", "08/29/1954")
 
-    def test_requires_the_parts_to_sit_together(self):
-        text = "Admitted 08 for 29 days in 1954 building"
-        # The year is present but not adjacent to month/day as a date.
-        assert extract_dob(text, "08/29/1954") in {"N/A", "08/29/1954"}
+    def test_nothing_to_compare_never_matches(self):
+        assert not dob_matches("", "08/29/1954")
+        assert not dob_matches("08/29/1954", "")
 
 
-class TestMemberIdExtraction:
+class TestMemberIdMatch:
     def test_exact_value_matches_case_insensitively(self):
-        assert extract_member_id("Member ID: a9000603900", "A9000603900") == "A9000603900"
+        assert member_id_matches("a9000603900", "A9000603900")
 
     def test_substring_of_a_longer_token_does_not_match(self):
-        assert extract_member_id("ID: XA90006039001", "A9000603900") == "N/A"
+        assert not member_id_matches("XA90006039001", "A9000603900")
 
-    def test_absent_value(self):
-        assert extract_member_id("no identifiers here", "A9000603900") == "N/A"
+    def test_absent_or_na_expected_value(self):
+        assert not member_id_matches("12345", "")
+        assert not member_id_matches("12345", "N/A")
 
 
 # --- page verdicts ----------------------------------------------------------
@@ -180,35 +166,35 @@ class TestMemberIdExtraction:
 class TestVerifyPage:
     def test_name_and_dob_verifies(self):
         exp = expected_from_manifest(manifest())
-        assert verify_page(exp, "2", "Justin Anderson", "08/29/1954", "N/A") is True
+        assert verify_page(exp, "2", "Justin Anderson", True, False) is True
 
     def test_name_alone_does_not_verify(self):
         exp = expected_from_manifest(manifest())
-        assert verify_page(exp, "2", "Justin Anderson", "N/A", "N/A") is False
+        assert verify_page(exp, "2", "Justin Anderson", False, False) is False
 
     def test_no_name_mode_never_verifies(self):
         exp = expected_from_manifest(manifest(first_name=None, last_name=None,
                                               member_name="Anderson"))
-        assert verify_page(exp, "", "Justin Anderson", "08/29/1954", "A9000603900") is False
+        assert verify_page(exp, "", "Justin Anderson", True, True) is False
 
 
 class TestClassifyPage:
     def test_verified_page(self):
         exp = expected_from_manifest(manifest())
-        assert classify_page("x", [], exp, "2", True) == PAGE_VERIFIED
+        assert classify_page([], exp, "2", True) == PAGE_VERIFIED
 
     def test_other_member_named_is_wrong_member(self):
         exp = expected_from_manifest(manifest())
-        assert classify_page("x", ["Maria Gonzalez"], exp, "2", False) == PAGE_WRONG_MEMBER
+        assert classify_page(["Maria Gonzalez"], exp, "2", False) == PAGE_WRONG_MEMBER
 
     def test_expected_member_named_but_unverified_is_not_wrong(self):
         exp = expected_from_manifest(manifest())
-        assert classify_page("x", ["Justin Anderson"], exp, "2", False) == PAGE_NOT_VERIFIED
+        assert classify_page(["Justin Anderson"], exp, "2", False) == PAGE_NOT_VERIFIED
 
     def test_nothing_detected_is_not_wrong_member(self):
         """A page with no names read off it is not evidence of another member."""
         exp = expected_from_manifest(manifest())
-        assert classify_page("x", [], exp, "2", False) == PAGE_NOT_VERIFIED
+        assert classify_page([], exp, "2", False) == PAGE_NOT_VERIFIED
 
 
 # --- document decision (what_if_rules) --------------------------------------
@@ -250,13 +236,58 @@ class TestDocumentDecision:
 # --- end to end over a record ----------------------------------------------
 
 
+def staged(*, name=None, dob=None, ids=(), name_extra=()):
+    """A page as the extraction stages it: only what it accepted and selected."""
+
+    def row(value, key, *, ner=False):
+        return {"key": key, "value": value, "accepted": True, "selected": True,
+                "ner_text": value if ner else ""}
+
+    fields = {
+        "name": ([row(name, "Patient Name")] if name else []) + [row(n, "Name") for n in name_extra],
+        "dob": [row(dob, "DOB", ner=True)] if dob else [],
+        "member_id": [row(i, "Member ID") for i in ids],
+    }
+    return StagedPage("p.jpg", {"fields": fields})
+
+
+class TestStagedPageFields:
+    def test_the_matching_name_is_the_detected_one(self):
+        exp = expected_from_manifest(manifest())
+        page = staged(name="Maria Gonzalez", name_extra=["Justin Anderson"])
+        fields, names, dob_ok, id_ok = staged_page_fields(page, exp, "2")
+        assert fields["Detected_Full_Name"] == "Justin Anderson"
+        assert names == ["Maria Gonzalez", "Justin Anderson"]
+        assert (dob_ok, id_ok) == (False, False)
+
+    def test_dob_and_id_present_only_when_they_are_the_manifests(self):
+        exp = expected_from_manifest(manifest())
+        fields, _names, dob_ok, id_ok = staged_page_fields(
+            staged(name="Justin Anderson", dob="01/02/1970", ids=["999", "A9000603900"]), exp, "2"
+        )
+        assert dob_ok is False and fields["Detected_DOB"] == "01/02/1970"
+        assert id_ok is True and fields["Detected_MemberID"] == "A9000603900"
+        assert fields["Detection_Source_DOB"] == "ner" and fields["Detection_Source_Name"] == "rule based"
+        assert fields["ner_key_source_DOB"] == "DOB"
+
+    def test_dob_is_reported_as_mm_dd_yyyy(self):
+        exp = expected_from_manifest(manifest())
+        fields, *_ = staged_page_fields(staged(dob="August 29, 1954"), exp, "2")
+        assert fields["Detected_DOB"] == "08/29/1954"
+
+    def test_a_page_the_extraction_could_not_read_finds_nothing(self):
+        exp = expected_from_manifest(manifest())
+        fields, names, dob_ok, id_ok = staged_page_fields(None, exp, "2")
+        assert fields["Detected_Full_Name"] == "N/A" and names == [] and not dob_ok and not id_ok
+
+
 class TestVerifyRecord:
     def test_identifies_the_verified_page(self):
         exp = expected_from_manifest(manifest())
         pages = [
             {"page_no": 1, "page_name": "1.jpg",
-             "text": "Patient Name: Justin Anderson  DOB: 08/29/1954  Member ID: A9000603900"},
-            {"page_no": 2, "page_name": "2.jpg", "text": "Progress note, nothing here."},
+             "staged": staged(name="Justin Anderson", dob="08/29/1954", ids=["A9000603900"])},
+            {"page_no": 2, "page_name": "2.jpg", "staged": staged()},
         ]
         result = verify_record("rec1", pages, exp, detect_name_mode(exp))
         assert result.pages_verified == 1
@@ -265,11 +296,20 @@ class TestVerifyRecord:
         assert result.pages[1].page_status == PAGE_NOT_VERIFIED
         assert result.document_decision == ACCEPT
 
+    def test_other_members_pages_reject_the_document(self):
+        exp = expected_from_manifest(manifest())
+        pages = [{"page_no": 1, "page_name": "1.jpg", "staged": staged(name="Maria Gonzalez")}]
+        result = verify_record("rec", pages, exp, "2")
+        assert result.pages[0].page_status == PAGE_WRONG_MEMBER
+        assert result.pages[0].ner_names == ["Maria Gonzalez"]
+        assert result.document_decision == REJECT
+        assert summary_status(result) == ("failed", "wrong_member_threshold")
+
     def test_threshold_uses_the_whole_document_not_the_subset(self):
         """Blank/junk pages are dropped before this stage, but the reject
         threshold is a proportion of the document, so total_pages must win."""
         exp = expected_from_manifest(manifest())
-        pages = [{"page_no": 1, "page_name": "1.jpg", "text": "nothing"}]
+        pages = [{"page_no": 1, "page_name": "1.jpg", "staged": staged()}]
         subset = verify_record("rec", pages, exp, "2", total_pages=100)
         assert subset.reject_threshold == 5
         assert subset.total_pages == 100
@@ -278,7 +318,7 @@ class TestVerifyRecord:
     def test_db_status_mapping(self):
         exp = expected_from_manifest(manifest())
         pages = [{"page_no": 1, "page_name": "1.jpg",
-                  "text": "Patient Name: Justin Anderson DOB: 08/29/1954"}]
+                  "staged": staged(name="Justin Anderson", dob="08/29/1954")}]
         result = verify_record("rec", pages, exp, "2")
         assert result.pages[0].db_page_status == "verified"
         assert result.db_document_decision == "accept"
@@ -298,7 +338,7 @@ class TestVerifyRecord:
         exp = expected_from_manifest(manifest(first_name=None, last_name=None,
                                               member_name="Anderson"))
         result = verify_record("rec", [{"page_no": 1, "page_name": "1.jpg",
-                                        "text": "x"}], exp, detect_name_mode(exp))
+                                        "staged": None}], exp, detect_name_mode(exp))
         status, reason = summary_status(result)
         assert status == "needs_review"
         assert reason == "manifest_name_incomplete"
@@ -327,90 +367,6 @@ class TestNameMode:
         assert exp["DummyMiddleName"] == "Robert"
         assert exp["DummyLastName"] == "Anderson"
         assert detect_name_mode(exp) == "3"
-
-
-class TestNerDisabledIsVisible:
-    def test_ner_flag_is_reported(self):
-        """A rules-only run must be distinguishable from a full one, because no
-        page can be marked wrong_member without the NER layer."""
-        exp = expected_from_manifest(manifest())
-        result = verify_record("rec", [{"page_no": 1, "page_name": "1.jpg",
-                                        "text": "x"}], exp, "2")
-        assert isinstance(result.ner_enabled, bool)
-        if not result.ner_enabled:
-            assert all(p.page_status != PAGE_WRONG_MEMBER for p in result.pages)
-
-
-# --- NER layer preflight ----------------------------------------------------
-
-
-class TestNerPreflight:
-    """The GLiNER layer is fully ported but optional at runtime. The preflight
-    must say *which* piece is missing — the package and the checkpoints need
-    different fixes, and the reference's ModelLoadError could not tell them
-    apart."""
-
-    def test_status_reports_every_field_callers_rely_on(self):
-        from stages.lib.member import ner_status
-
-        status = ner_status()
-        for key in ("enabled", "deps_installed", "deps_detail", "weights_present",
-                    "weights_missing", "ready", "reason", "models_path"):
-            assert key in status, f"ner_status() must report {key}"
-
-    def test_ready_requires_enabled_deps_and_weights(self):
-        from stages.lib.member import ner_status
-
-        status = ner_status()
-        if status["ready"]:
-            assert status["enabled"] is True
-            assert status["deps_installed"] is True
-            assert status["weights_missing"] == []
-        else:
-            assert status["reason"], "a not-ready layer must say why"
-
-    def test_missing_package_is_distinguishable_from_missing_weights(self):
-        from stages.lib.member.extractors.ner_based.config import deps_installed
-
-        installed, detail = deps_installed()
-        assert isinstance(installed, bool)
-        if not installed:
-            # Must name the fix, not just the symptom.
-            assert "requirements-ner.txt" in detail
-
-    def test_downloader_is_present_and_declares_all_three_models(self):
-        """The checkpoints are not vendored; the downloader is how they arrive,
-        so it has to ship with the port."""
-        import importlib
-
-        mod = importlib.import_module(
-            "stages.lib.member.extractors.ner_based.model_downloader"
-        )
-        ids = [d.SPEC["id"] for d in mod.DOWNLOADERS]
-        assert ids == ["gliner_large", "gliner_medium", "gliner_low"]
-        for downloader in mod.DOWNLOADERS:
-            assert downloader.SPEC["repo"].startswith("urchade/gliner")
-            assert callable(downloader.download)
-
-    def test_optional_requirements_file_exists_and_pins_the_runtime(self):
-        from pathlib import Path
-
-        req = Path(__file__).resolve().parents[1] / "core-pipeline" / "requirements-ner.txt"
-        assert req.is_file(), "requirements-ner.txt must ship with the NER port"
-        text = req.read_text(encoding="utf-8")
-        for package in ("gliner", "torch", "transformers", "huggingface_hub"):
-            assert package in text, f"{package} missing from requirements-ner.txt"
-
-    def test_predict_entities_is_inert_while_the_layer_is_off(self):
-        """With the layer off nothing may reach a model — and the absence of
-        hits must not look like a model that answered 'nobody'."""
-        from stages.lib.member.extractors.ner_based import config
-
-        if config.ner_enabled:
-            pytest.skip("NER layer is enabled in this environment")
-        from stages.lib.member.extractors.ner_based.model import predict_entities
-
-        assert predict_entities("Patient Name: Robert Smith", ["person"]) == []
 
 
 class TestTrimExtractedName:

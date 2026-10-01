@@ -20,6 +20,10 @@ class PageFeatures:
     has_structured: bool = False
     identity_text: str = ""
     text_fingerprint: str | None = None
+    # The printed page number the key/value extraction found. When the extraction ran
+    # (marker_extracted) it replaces the text patterns: a page it found none on has no marker.
+    extracted_marker: "ExplicitMarker | None" = None
+    marker_extracted: bool = False
 
 
 @dataclass

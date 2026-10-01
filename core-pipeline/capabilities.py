@@ -1,8 +1,8 @@
 """What the optional features can actually do right now.
 
 Every optional dependency degrades a stage rather than failing it — no Azure
-Document Intelligence means final2 produces no text, no GLiNER means no page can
-be marked `wrong_member`, no blob credentials means `run` works from a local
+Document Intelligence means final2 produces no text, no extraction weights means the key/value stage
+fails the chart, no blob credentials means `run` works from a local
 path and not from a container. The run records that (see the working rules in
 CLAUDE.md), but only after it has happened. This module answers the same
 question *before* a chart is submitted.
@@ -28,16 +28,12 @@ from config import (
     AZURE_DI_FEATURES,
     AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT,
     AZURE_DOCUMENT_INTELLIGENCE_KEY,
-    AZURE_OPENAI_DEPLOYMENT,
-    AZURE_OPENAI_ENDPOINT,
     AZURE_PRINCIPAL_ID,
     AZURE_STORAGE_ACCOUNT_KEY,
     AZURE_STORAGE_ACCOUNT_NAME,
     AZURE_STORAGE_AUTH,
     AZURE_STORAGE_CONNECTION_STRING,
     AZURE_STORAGE_CONTAINER,
-    DOS_LLM_ENABLED,
-    MEMBER_NER_ENABLED,
     SKIP_OCR,
 )
 
@@ -221,45 +217,14 @@ def azure_di_status() -> dict[str, Any]:
     return status
 
 
-def dos_llm_status() -> dict[str, Any]:
-    """The DOS LLM pass, and which credential it resolved to."""
-    status: dict[str, Any] = {
-        "enabled": DOS_LLM_ENABLED,
-        "endpoint": AZURE_OPENAI_ENDPOINT or None,
-        "deployment": AZURE_OPENAI_DEPLOYMENT,
-        "ready": DOS_LLM_ENABLED,
-    }
+def extraction_status() -> dict[str, Any]:
+    """Key/value extraction: the packages and weights it needs. Never raises, never loads a model."""
     try:
-        import sys
-        from pathlib import Path
+        from stages.lib.extraction import readiness
 
-        lib = str(Path(__file__).resolve().parent / "stages" / "lib" / "dos")
-        if lib not in sys.path:
-            sys.path.insert(0, lib)
-        from azure_llm import resolved_auth
-
-        status["auth"] = resolved_auth()
-    except Exception:
-        status["auth"] = None
-
-    if not DOS_LLM_ENABLED:
-        if not AZURE_OPENAI_ENDPOINT:
-            status["reason"] = "not set: AZURE_OPENAI_ENDPOINT"
-        elif status["auth"] is None:
-            status["reason"] = "no usable credential (set AZURE_OPENAI_API_KEY, or AZURE_OPENAI_AUTH=entra)"
-        else:
-            status["reason"] = "DOS_LLM_ENABLED=false"
-    return status
-
-
-def ner_status() -> dict[str, Any]:
-    """The GLiNER layer. Never raises — an optional feature's probe must not 500."""
-    try:
-        from stages.lib.member import ner_status as _ner_status
-
-        return _ner_status()
+        return readiness()
     except Exception as exc:
-        return {"enabled": MEMBER_NER_ENABLED, "ready": False, "reason": str(exc)}
+        return {"ready": False, "reason": str(exc)}
 
 
 def hw_model_status() -> dict[str, Any]:
@@ -353,8 +318,7 @@ def all_capabilities(*, probe: bool = False) -> dict[str, Any]:
     return {
         "blob": probe_blob() if probe else blob_status(),
         "azure_document_intelligence": azure_di_status(),
-        "dos_llm": dos_llm_status(),
-        "member_ner": ner_status(),
+        "extraction": extraction_status(),
         "docling_final1": docling_status(),
         "hw_model": hw_model_status(),
         "blank_junk_model": blank_junk_model_status(),
@@ -389,8 +353,7 @@ def startup_lines(caps: dict[str, Any]) -> list[tuple[str, str]]:
     """(label, value) pairs for the startup banner — OK / off, no paths."""
     blob = caps["blob"]
     di = caps["azure_document_intelligence"]
-    llm = caps["dos_llm"]
-    ner = caps["member_ner"]
+    extraction = caps["extraction"]
     docling = caps.get("docling_final1") or {}
     skip_ocr = caps.get("skip_ocr") or {}
     hw = caps.get("hw_model") or {}
@@ -408,8 +371,7 @@ def startup_lines(caps: dict[str, Any]) -> list[tuple[str, str]]:
     if di.get("features"):
         di_on += f" — features={','.join(di['features'])}"
 
-    llm_on = f"OK — {llm.get('auth') or 'configured'}"
-    ner_on = f"OK — {ner.get('model_id') or 'ready'}"
+    extraction_on = f"OK — {extraction.get('model_version') or 'ready'}"
     docling_on = "OK"
     hw_on = f"OK — {hw.get('engine') or 'ready'}"
     rapid_on = "OK"
@@ -429,7 +391,6 @@ def startup_lines(caps: dict[str, Any]) -> list[tuple[str, str]]:
         ("blank/junk model", _one_line(bj, bj_on)),
         ("final1 Docling", _one_line(docling, docling_on)),
         ("final2 OCR", _one_line(di, di_on)),
-        ("DOS LLM", _one_line(llm, llm_on)),
-        ("member NER", _one_line(ner, ner_on)),
+        ("key/value extraction", _one_line(extraction, extraction_on)),
         ("skip OCR", skip_line),
     ]

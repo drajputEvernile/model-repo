@@ -29,7 +29,6 @@ flowchart TB
   subgraph EXT["External"]
     BLOB[("Azure Blob")]
     ADI[("Azure Document<br/>Intelligence")]
-    AOAI[("Azure OpenAI")]
   end
 
   subgraph CP["core-pipeline · port 8001 · own compose"]
@@ -59,7 +58,6 @@ flowchart TB
 
   BLOB --> ST
   ADI --> ST
-  AOAI --> ST
   DB <--> PG
   ST --> VOL
   ADPT --> PG
@@ -219,13 +217,13 @@ still renders.
 
 | File | Role |
 |---|---|
-| `capabilities.py` | What each optional feature can actually do right now — blob, Azure DI, the DOS LLM, GLiNER — and the one precondition each is missing. Read by both the startup banner and `GET /health`, so they cannot disagree. Configuration only; opens no sockets, except `probe_blob()` which startup calls once, bounded. |
+| `capabilities.py` | What each optional feature can actually do right now — blob, Azure DI, the key/value extraction — and the one precondition each is missing. Read by both the startup banner and `GET /health`, so they cannot disagree. Configuration only; opens no sockets, except `probe_blob()` which startup calls once, bounded. |
 | `stages/lib/image_preprocess/osd.py` | Coarse page orientation from Tesseract OSD — the clockwise rotation to apply, with a confidence floor, declining rather than guessing on a sparse page. Replaces the geometric detector's coarse step, which recovered 0 of 6 sideways pages at confidence 1.000. |
 | `stages/lib/image_preprocess/stage.py` | **Stage 1**, moved ahead of OCR so every pass reads an upright page. Always measures orientation/tilt/mirror; writes `corrected-pages/<n>.jpg` only when `ROTATION_CORRECTION_ENABLED` and only for pages that change. `rotation_applied` means a corrected file exists, not that the page looked crooked. |
-| `config.py` | Every environment-driven setting in one place: database URL, data roots, Azure credentials, feature flags (`MEMBER_NER_ENABLED`, `DOS_LLM_ENABLED`), `STAGE_WORKERS`, and the `chart_dir` / `pages_dir` / `ocr_dir` / `imaging_dir` path helpers. |
+| `config.py` | Every environment-driven setting in one place: database URL, data roots, Azure credentials, the extraction weights root (`EXTRACTION_MODELS_ROOT`; the model version is pinned to v002), `STAGE_WORKERS`, and the `chart_dir` / `pages_dir` / `ocr_dir` / `imaging_dir` path helpers. |
 | `cli.py` | Command-line entry: `serve`, `run`, `batch`, `write`, `rerun`, `stages`, `status`, `manifest`. Mirrors the API one-for-one, without the HTTP hop. |
 | `requirements.txt` | Python dependencies for the service. |
-| `requirements-ner.txt` | **Optional** GLiNER runtime (`gliner`, `torch`, `transformers`, ~2.5 GB). Separate so the base image stays small; `docker build --build-arg WITH_NER=true` includes it. |
+| `requirements-extraction.txt` | The key/value extraction runtime (`gliner`, `torch`, `transformers`, `lightgbm`, `pandas`), pinned to the versions the extraction was built and trained on. Required; the Docker image always installs it. |
 | `Dockerfile` | Runtime image. Installs Tesseract and the OpenCV/ONNX system libraries the reference modules need. |
 | `docker-compose.yml` | Standalone deployment: ports, env, and the four volume mounts. |
 | `.env.example` | Documented template for `.env`, with the consequence of leaving each optional service unset. |
@@ -274,10 +272,10 @@ Shared plumbing stays in `core-pipeline/stages/` (`_support.py`) and `stages/uti
 | `lib/blank_junk/stage.py` | **Stages 3 and 7.** Both passes: eligibility, ±2-neighbor similarity duplicates, the subtype mapping into the schema's constrained vocabulary, `mark_blank_junk_final`, and a full CSV rewrite from the database. |
 | `lib/ocr/stage_final1.py` | **Stage 4.** Docling+RapidOCR when ready; else RapidOCR-onnx only. Stores as `ocr_type='docling'` — the UI's "Final (OSS)" slot. Writes `section_header_candidates`. |
 | `lib/ocr/stage_final2.py` | **Stage 5.** Azure Document Intelligence `prebuilt-read`, one shared client. Skips high-quality printed pages. The billed stage, so the resume path matters most here. |
-| `lib/ocr/stage_section_headers.py` | **Stage 6.** Re-derives `section_headers` from on-disk Final1/Final2 JSON (candidates / `pagesMeta` / `document`) against the canon list — no OCR. |
+| `lib/extraction/stage.py` | **Stage 6 (`kv_extract`).** Runs every extractor over the chart's Final2 word boxes, stages the result, and writes the headings into `section_headers`. See [EXTRACTION.md](EXTRACTION.md). |
 | `utilities/gate_delta.py` | Adaptive skip_ocr: compare quality/rotation gate signatures and reopen only affected `page_stage_status` rows. |
-| `lib/member/stage.py` | **Stage 8.** Plumbing around the ported engine: picks the manifest row, chooses eligible pages, assembles the best text per page, runs `verify_record`, persists page rows and the summary, writes three CSVs including the V1-shaped comparison file. |
-| `lib/dos/stage.py` | **Stage 9.** Builds the marker-delimited text, calls the ported driver `detect_dos_per_page` (regex → LLM → carry-forward), persists the primary pair plus every date, writes the DOS CSV. |
+| `lib/member/stage.py` | **Stage 8.** Plumbing around the ported engine: picks the manifest row, chooses eligible pages, hands the engine each page's staged name / DOB / ID, runs `verify_record`, persists page rows and the summary, writes three CSVs including the V1-shaped comparison file. |
+| `lib/dos/stage.py` | **Stage 9.** Resolves the staged dates across the chart (`resolve.py`: progress-note spans, default-date pages), persists the primary pair plus every date, writes the DOS CSV. |
 | `lib/ocr/reuse.py` | skip_ocr: reuse on-disk OCR artifacts instead of re-running OCR stages. |
 | `lib/page_classify/stage.py` | Page type / codeability (`page_subtype`). |
 | `lib/encounter/stage.py` | Encounter type (`encounter_type`). |
@@ -291,12 +289,13 @@ One folder per pipeline concern; only `canon_store.py` sits at the top level.
 | Folder | Holds |
 |---|---|
 | `image_preprocess/` | Stage 1: rotation / tilt / mirror, handwriting classifier, quality score |
-| `ocr/` | Docling final1 engine + section-header matching (stage 6) |
+| `ocr/` | Docling final1 engine + OCR-time section-header pre-filter |
 | `blank_junk/` | Blank / junk rules, TF-IDF model bridge, bundled model code (`model/`) |
 | `page_classify/` | Page type / codeability (keyword families, header-weighted, family spans) |
 | `encounter/` | Encounter type per visit (tiered evidence: page type → explicit setting text → hints) |
-| `dos/` | Date-of-service driver + LLM pass |
-| `member/` | Member extraction + verification engine |
+| `extraction/` | Key/value extraction (stage 6): the extractors, trained-model selection, staging, training code |
+| `dos/` | Date-of-service resolution over the staged dates |
+| `member/` | Member verification engine (rules over the staged name / DOB / ID) |
 | `sequencing/` | Page sequencing |
 | `keyword-canon/` | Every editable keyword JSON, reloaded on change (see `canon_store.py`) |
 
@@ -319,7 +318,7 @@ Live code for stage 1, not reference material.
 |---|---|
 | `docling_ocr.py` | Docling + RapidOCR `.pth` converter for final1. |
 | `section_header_match.py` | Lexical (+ optional MiniLM) match against `keyword-canon/section_header_canon.json`. |
-| `section_headers_io.py` | Reads / rewrites `section_headers` in final1/final2 JSON (stage 6, no OCR). |
+| `section_headers_io.py` | OCR-time header candidate filtering for final1/final2 JSON; the `section_headers` the pipeline keeps are written by `kv_extract`. |
 
 Weight files live under **`core-pipeline/models/`** (gitignored), not under
 `stages/`:
@@ -351,53 +350,47 @@ Ported from `advantmed-imaging-ui/02-imaging-pipeline/junk-classification/`.
 
 ### `core-pipeline/stages/lib/member/` — member verification
 
-Ported from the V1 `Member_Verification/` tree. **Logic is verbatim; only
-imports changed** (relative imports instead of the prototype's `sys.path`
-inserts).
+Ported from the V1 `Member_Verification/` tree. **The verification rules are verbatim.**
+The page's name, DOB and ID are no longer searched for here: the key/value extraction
+(stage 6) stages them and the engine checks them against the manifest.
 
 | File | Role |
 |---|---|
-| `engine.py` | The port of `run.py`'s decision flow: `extract_page_fields` (rules → NER escalation), `verify_page`, `classify_page`, `document_verified`, and `verify_record` which drives a whole chart. Also `expected_from_manifest`, `detect_name_mode`, `summary_status`, and `page_result_to_v1_row` for diffing against a V1 run. |
+| `engine.py` | The port of `run.py`'s decision flow: `staged_page_fields` (the staged name / DOB / ID vs the manifest), `verify_page`, `classify_page`, `document_verified`, and `verify_record` which drives a whole chart. Also `expected_from_manifest`, `detect_name_mode`, `summary_status`. |
 | `__init__.py` | Public surface for the stage. |
 | **`rules/`** | |
 | `base_rules.py` | `combine_evidences` — the name+DOB/ID acceptance rule — and `is_present` (treats `"N/A"` as absent). |
 | `name_2_words_rules.py` | Two-word verification: full match, or initial-only which needs both corroborators. |
 | `name_3_words_rules.py` | Three-word verification: all three or two of three. |
-| `wrong_member_rules.py` | `wrong_member_on_page` — true when NER read names off the page and none is the expected member. The only route to a `Reject`. |
+| `wrong_member_rules.py` | `wrong_member_on_page` — true when the extraction found member names on the page and none is the expected member. The only route to a `Reject`. |
+| `name_common.py` | The heart of name matching: tokenising, ignore/label/non-name vocabularies, `classify_two_word_name` / `classify_three_word_name` (including the `ONE_FULL_WRONG` "different member" case). |
+| `field_match.py` | Does an extracted DOB / member ID say what the manifest says (the V1 comparisons, plus month-name dates). |
 | `what_if_rules.py` | Page buckets (`Verified` / `Wrong_Member` / `Not_Verified`), `reject_threshold` = `min(5, ceil(10%))`, and `apply_what_if` → Accept/Reject. |
 | `__init__.py` | Re-exports the rule surface. |
-| **`extractors/rule_based/`** | |
-| `name_common.py` | The heart of name matching: tokenising, ignore/label/non-name vocabularies, `classify_two_word_name` / `classify_three_word_name` (including the `ONE_FULL_WRONG` "different member" case), and the sliding-window `_best_span` search. |
-| `name_2_words.py`, `name_3_words.py` | Thin wrappers over the span search. |
-| `dob.py` | Finds the expected DOB's three parts adjacent in any supported order; `date_parts_match` is reused by the NER pass. |
-| `member_id.py` | Exact MemberID match with boundary guards, so a substring of a longer token does not count. |
-| `__init__.py` | Re-exports the four extractors. |
-| **`extractors/ner_based/`** | |
-| `keys.py` | Cuts the real sentence around a field key out of the page ("Patient Name: Robert Smith"), with the reach-across-a-gap rules. NER reads real text, not rebuilt tokens. |
-| `stages/lib/keyword-canon/*_canon.json` | Editable keyword / catalog files, reloaded on change (no restart): `junk_keywords_canon.json` (junk detector phrases), `dos_canon.json` (DOS scoring weights, labels, clinical / discharge cues, `DOS_MAX_AGE_YEARS`, `DOS_MIN_SCORE`, `DOS_DEFAULT_DATE`), `member_keywords_canon.json` (member key groups / ignore labels), `section_header_canon.json`, `codeable_canon.json`, `encounter_canon.json`. Loaded via `stages/lib/canon_store.py`. |
-| `name.py` | Runs NER on each patient-name sentence, merges adjacent person spans, trims label words, and picks the best candidate. Returns *every* person found, so the caller can also spot a wrong member. |
-| `dob.py`, `member_id.py` | Second-pass DOB / MemberID from NER over their key sentences. |
-| `model.py` | Model loading and prediction: offline mode, retries, fail-loud on an unloadable model, GLiNER and HF-token backends. Short-circuits when the layer is disabled. |
-| `catalog.py` | The three GLiNER checkpoints and the on-disk relinking that makes them load offline. Weights directory is configurable. |
-| `config.py` | NER toggles: `MEMBER_NER_ENABLED`, per-model flags, checkpoint path. |
-| `log.py` | Per-hit NER log rows (sentence, value, span, confidence) for auditing a decision. |
-| `__init__.py` | Re-exports the three NER extractors. |
-| **`extractors/ner_based/model_downloader/`** | |
-| `_common.py` | Hugging Face snapshot download with retries, plus two-stage verification: every file present and non-empty, then an actual load and one prediction — a snapshot can complete and still not load. |
-| `gliner_large_v2_1.py`, `gliner_medium_v2_1.py`, `gliner_low.py` | One checkpoint each. |
-| `__main__.py` | `python -m …model_downloader [--force] [--check]` — downloads or verifies all three and reports which failed. |
-| `__init__.py` | Exposes `DOWNLOADERS`. |
+### `core-pipeline/stages/lib/extraction/` — key/value extraction
+
+Built and trained as a standalone tool, integrated here as stage 6 (`kv_extract`). Full
+description: [EXTRACTION.md](EXTRACTION.md).
+
+| File / folder | Role |
+|---|---|
+| `stage.py` | The stage: reads Final2 word boxes, extracts the chart, stages it, writes headings into `section_headers`; `ensure_staging` re-runs it for a later stage when the staging is gone. |
+| `engine.py` | `extract_chart` (extract, then let the trained version pick) and `readiness` (packages + weights, loads nothing). |
+| `pipeline.py` | One pass per page over every extractor, then the headings. |
+| `ocr_input.py` | Final2 page → the word-box page the extractors take; pages without boxes are reported. |
+| `staging.py` | The per-chart staging file: write / read / drop, and the `Staged` / `StagedPage` views. |
+| `dos/`, `member_dob/`, `member_id/`, `member_name/`, `provider_name/`, `electronic_signature/`, `page_no/`, `heading/` | One extractor each: `extract.py` finds candidates, `output.py` shapes rows, `keys.json` etc. are its catalogs. |
+| `util/` | Geometry, dates, key catalog, GLiNER loader, model setup, settings (`config.py`). |
+| `training/` | Dataset, training, evaluation and the registry of trained versions. |
 
 ### `core-pipeline/stages/lib/dos/` — date of service
 
-Ported from `advantmed-imaging-ui/02-imaging-pipeline/dos-extraction/`.
+The dates are found by the extraction; this folder decides which encounter each page belongs to.
 
 | File | Role |
 |---|---|
-| `dos_logic.py` | The whole DOS engine: page splitting, the regex passes (admit/discharge labels, keyword-anchored dates), confidence tiers, the LLM prompt and call, ISO normalisation, and `detect_dos_per_page` — the driver the stage calls, which owns the document-level carry-forward. |
-| `azure_llm.py` | Azure OpenAI client construction from env, by API key or by Entra ID with no key at all (`AZURE_OPENAI_AUTH=key\|entra\|auto`, default `auto`); `resolved_auth()` is the one place that decides which. Returns `None` when unconfigured so the caller degrades to regex-only. |
-| `extract_dos.py` | The reference's standalone CLI, kept for running the engine outside the pipeline and for comparison. |
-| `requirements.txt` | Dependency list inherited from the V1 prototype (`openai`). |
+| `resolve.py` | `page_dates` (a page's staged dates; admit + discharge are one range) and `resolve_chart` (progress-note spans, non-encounter pages, default-date pages), driven by `dos_canon.json`. |
+| `stage.py` | Reads the staging, resolves, writes the DB rows and the DOS CSV. |
 | `__init__.py` | Package marker. |
 
 ### `review-ui/backend/app/`
@@ -471,9 +464,10 @@ which is exactly what blank/junk does. `page_stage_status` keyed
 default that re-ran everything would make re-running expensive enough to avoid,
 which is the wrong incentive when charts fail part-way.
 
-**Degradation is recorded, never silent.** No Azure OpenAI ⇒
-`extraction_method='rules'`. No NER ⇒ `ner_enabled=false` on every row and
-`|ner_disabled` on the summary reason. Both appear in `GET /health`. A missing
+**Degradation is recorded, never silent.** A page the extraction could not read
+(no word boxes) is skipped as `no_word_boxes` and logged; the later stages see it as a
+page with nothing found. A missing extraction model fails the stage rather than
+changing what every later stage reads. Both appear in `GET /health`. A missing
 capability must be visible in the data, not inferable only from a log line.
 
 **Files are rebuilt, not appended.** Every CSV and combined text file is
@@ -515,14 +509,9 @@ retry of a stage that raised, and work in flight is lost if the process restarts
 pages inside one stage. Two charts ingested at once run two full chains in one
 process.
 
-**The GLiNER layer ships disabled and cannot run out of the box.** All of its
-code is ported and wired — extractors, key-sentence builder, model loader,
-catalog and downloader. What is *not* vendored is the runtime (`gliner`, `torch`,
-`transformers`, ~2.5 GB) and the checkpoints (~2 GB); neither belongs in a git
-repository. Until both are installed, member verification runs rules-only and
-**no document can be Rejected**, because `wrong_member_on_page` decides from what
-NER read off the page. `GET /health` names which of the three preconditions is
-unmet. Turning it on: [LOGIC.md](LOGIC.md#turning-it-on).
+**The extraction weights are not all in git.** The trained ranker (`models/kv_ranker/v002`, ~1 MB) is
+committed; GLiNER (~585 MB) and the Heron detector (~164 MB) are copied into `models/` or fetched with
+`python -m stages.lib.extraction.util.model_setup`. `GET /health` → `extraction` names what is missing.
 
 **The SQL is syntax-validated, not run.** `v1.sql` and `v2.sql` parse
 clean under a real PostgreSQL parser (`pglast`), and the code paths that use them

@@ -1,8 +1,8 @@
-"""Member extraction + verification, ported from V1 Member_Verification.
+"""Member verification, ported from V1 Member_Verification.
 
-Public surface used by stages/lib/member/stage.py.
+Takes the member name / DOB / ID the extraction layer staged (stages/lib/extraction) and
+checks them against the manifest. Public surface used by stages/lib/member/stage.py.
 """
-from .extractors.ner_based.config import ner_status
 from .engine import (
     DETECTION_SOURCE_DB,
     PAGE_STATUS_DB,
@@ -12,9 +12,8 @@ from .engine import (
     detect_name_mode,
     document_verified,
     expected_from_manifest,
-    extract_full_name_rule,
-    extract_page_fields,
     page_result_to_v1_row,
+    staged_page_fields,
     summary_status,
     verify_page,
     verify_record,
@@ -22,7 +21,6 @@ from .engine import (
 
 __all__ = [
     "DETECTION_SOURCE_DB",
-    "ner_status",
     "PAGE_STATUS_DB",
     "PageResult",
     "RecordResult",
@@ -30,9 +28,8 @@ __all__ = [
     "detect_name_mode",
     "document_verified",
     "expected_from_manifest",
-    "extract_full_name_rule",
-    "extract_page_fields",
     "page_result_to_v1_row",
+    "staged_page_fields",
     "summary_status",
     "verify_page",
     "verify_record",

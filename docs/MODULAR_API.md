@@ -25,7 +25,7 @@ rewriting orchestration.
 6. **Project config** = which modules are enabled + default `models` map.
    The same module can ship alone (`POST /ocr` only) or as part of a chain.
 7. **Degraded runs stay visible** — missing optional deps stamp what
-   actually ran (`extraction_method='rules'`, `member_ner.ready=false`)
+   actually ran (`pages_no_word_boxes`, `extraction.ready=false`)
    rather than failing silently.
 8. **One bad page must not sink a chart** — per-page errors are recorded;
    the module continues.
@@ -85,17 +85,15 @@ Identity extract; verify as a sibling resource.
 
 | `model` | Role |
 |---|---|
-| `rules` | Regex / layout rules |
-| `ner` | GLiNER |
-| `azure_openai` | LLM extract |
+| `kv_extract` | The key/value extraction (rules find candidates, the trained version picks; GLiNER reads the sentences) |
 
 Suggested shape:
 
-- `POST /member/extract` — fields from page text  
+- `POST /member/extract` — fields from page word boxes  
 - `POST /member/verify` — compare to manifest (needs `/manifest`)  
 - `GET /member?chart_id=` — extraction + summary  
 
-**Toggle** — which extractors; NER off ⇒ wrong-member / rejection unreachable.
+**Toggle** — none; the extraction model version is pinned to v002.
 
 ### 7. `POST` / `GET` `/dos`
 
@@ -103,11 +101,10 @@ Dates of service.
 
 | `model` | Role |
 |---|---|
-| `rules` | Regex |
-| `azure_openai` | LLM pass |
+| `kv_extract` | The extraction's chosen dates, resolved across the chart |
 
 - **Out** — page-level + doc-level dates (JSONB)  
-- **Toggle** — LLM enabled per project  
+- **Toggle** — the extraction model version  
 
 ### 8. `POST` / `GET` `/headers`
 
@@ -182,7 +179,7 @@ monolithic `/run`.
 | `/classification/blank-junk` | `blank_junk` pass 1 & 2 |
 | `/ocr` (`docling`) | `ocr_final1` |
 | `/ocr` (`azure_docintel`) | `ocr_final2` |
-| `/headers` | `section_headers` |
+| `/headers` | `kv_extract` |
 | `/member` | `member_extract_verify` |
 | `/dos` | `dos_extract` |
 | `/classification/page-type` | `page_subtype` |

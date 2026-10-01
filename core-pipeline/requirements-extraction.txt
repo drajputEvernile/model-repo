@@ -1,0 +1,31 @@
+# Key/value extraction (stages/lib/extraction): GLiNER over key/value sentences, the Heron
+# heading detector, and the trained LightGBM ranker. Required — member verification, DOS,
+# headings and page sequencing read what it stages. Install on top of requirements.txt:
+#
+#     pip install -r requirements.txt -r requirements-extraction.txt
+#
+# Versions are the ones the extraction rules and the trained version (models/kv_ranker/v002)
+# were built and scored on. Weights are not installed here; copy them into models/:
+#
+#   models/gliner_low/          GLiNER small-v2.1 (+ encoder/)
+#   models/layout_heron/        docling-layout-heron
+#   models/kv_ranker/v002/      trained ranker
+#
+# `python -m stages.lib.extraction.util.model_setup` downloads the two public models at
+# their pinned revisions (see stages/lib/extraction/util/config.py).
+pillow>=10.0
+gliner==0.2.29
+sentencepiece==0.2.2
+protobuf==7.36.1
+# 5.13 has the RT-DETRv2 (Heron) heading detector
+transformers==5.13.1
+tokenizers==0.22.2
+safetensors==0.8.0
+huggingface_hub==1.31.0
+torch==2.14.0
+torchvision==0.29.0
+numpy==2.5.3
+pandas==3.0.5
+lightgbm==4.7.0
+# training/ (train.py, crossval.py)
+scikit-learn~=1.9.1

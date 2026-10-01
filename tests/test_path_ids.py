@@ -127,15 +127,3 @@ def test_dotenv_override_wins_for_ner_model_id(tmp_path, monkeypatch):
     monkeypatch.setenv("MEMBER_NER_MODEL_ID", "gliner_low")
     load_dotenv(env, override=True)
     assert os.environ["MEMBER_NER_MODEL_ID"] == "gliner_medium"
-
-
-def test_ner_config_finds_core_pipeline_root():
-    from stages.lib.member.extractors.ner_based.config import (
-        CORE_ROOT,
-        _core_pipeline_root,
-    )
-
-    root = _core_pipeline_root()
-    assert root == CORE_ROOT
-    assert (root / "cli.py").is_file()
-    assert (root / "api").is_dir()

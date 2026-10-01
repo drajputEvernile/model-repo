@@ -1,38 +1,33 @@
-"""Stage: member extraction + manifest verification.
+"""Stage: manifest verification of the extracted member details.
 
-Runs the ported V1 engine (``stages/lib/member``) — rule-based extraction over
-the whole page, NER escalation only where the rules found nothing, the
+Runs the ported V1 engine (``stages/lib/member``) — the verification rules, the
 wrong-member check, and the what-if Accept/Reject threshold. See
 ``stages/lib/member/engine.py`` for the algorithm and how it maps to the
 reference.
 
-This stage is responsible for the plumbing around that engine:
+The member name, DOB and ID are not extracted here: the key/value extraction stage
+(``stages/lib/extraction``) read every page once, right after OCR, and staged them.
+This stage is responsible for the plumbing around the engine:
 
   * pick the manifest row for the chart (by record_id, so a manifest swept
     before ingest still counts),
   * choose which pages to feed it (blank/junk/duplicate pages are excluded),
-  * feed it the best OCR text available per page,
+  * feed it each page's staged extraction,
   * persist page rows, the summary, and the two CSVs the review UI reads.
 
-Important: the reject path needs the NER layer. ``wrong_member_on_page`` decides
-from the names NER read out of the page's patient-name sentences, so with
-``MEMBER_NER_ENABLED=false`` no page can be classified wrong_member and no
-document can be Rejected. That is recorded on every row (``ner_enabled``) and in
-the summary's decision_reason so a rules-only run is never read as a full one.
+``wrong_member_on_page`` decides from the member names the extraction found on a
+page, so a page the extraction could not read (no word boxes) can be neither
+verified nor wrong_member.
 """
 from __future__ import annotations
 
 import logging
-import sys
 from datetime import date, datetime
 from typing import Any, Optional
 
-from config import MEMBER_NER_ENABLED, MEMBER_NER_MODEL_ID
 from db import (
     connect,
     get_blank_junk_flags,
-    get_ocr_texts,
-    get_quality_map,
     list_manifest_members,
     source_record_id,
     upsert_member_extraction,
@@ -42,7 +37,6 @@ from db import (
 from db.paths import imaging_csv, write_csv
 from stages._support import (
     BJ_EXCLUDE,
-    best_page_text,
     mark_completed,
     mark_failed,
     mark_processing,
@@ -50,13 +44,11 @@ from stages._support import (
     stage_run,
 )
 
-# Imported by its package name only. A second name (a bare ``member`` via a
-# sys.path insert) would load the engine twice with separate module state.
+from stages.lib.extraction.stage import ensure_staging
 from stages.lib.member import (
     DETECTION_SOURCE_DB,
     detect_name_mode,
     expected_from_manifest,
-    ner_status,
     page_result_to_v1_row,
     summary_status,
     verify_record,
@@ -146,31 +138,6 @@ def _page_confidence(page: Any) -> float:
     return round(min(score, 0.99), 4)
 
 
-def _ocr_text_map(conn: Any, chart_id: int) -> dict[int, str]:
-    """Best available text per page: final2 → final1 → prelim (restricted).
-
-    Read from ocr_results in three queries rather than re-parsing the combined
-    text files once per page, which was O(pages²) file parsing in v6.
-
-    Prelim is never used for handwritten / uncertain / mixed / low-quality
-    pages. If final2 is empty (skipped or failed), final1 is used.
-    """
-    prelim = get_ocr_texts(conn, chart_id, "tesseract")
-    final1 = get_ocr_texts(conn, chart_id, "docling")
-    final2 = get_ocr_texts(conn, chart_id, "azuredocintel")
-    quality = get_quality_map(conn, chart_id)
-
-    merged: dict[int, str] = {}
-    for page_id in set(prelim) | set(final1) | set(final2) | set(quality):
-        merged[page_id] = best_page_text(
-            final2=final2.get(page_id),
-            final1=final1.get(page_id),
-            prelim=prelim.get(page_id),
-            quality_row=quality.get(page_id),
-        )
-    return merged
-
-
 def _pick_manifest_row(rows: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
     """The manifest row to verify against.
 
@@ -195,30 +162,12 @@ def _pick_manifest_row(rows: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
 
 
 def run(chart_id: int, *, force: bool = False) -> dict[str, Any]:
-    # Say up front what this run can and cannot conclude. Without the NER layer
-    # no page can be classified wrong_member, so no document can be Rejected.
-    ner = ner_status()
-    if ner["ready"]:
-        logger.info("member: NER layer active (%s)", ", ".join(ner["enabled_models"]))
-    else:
-        logger.warning(
-            "member: NER layer INACTIVE (%s) — rules-only. No page can be marked "
-            "wrong_member, so this chart cannot be Rejected on member evidence.",
-            ner["reason"],
-        )
-    # Honour that warning. Gating on MEMBER_NER_ENABLED alone let the flag be
-    # true while the checkpoints were absent, so the engine called NER anyway
-    # and ModelLoadError killed the whole chart — after five stages of work —
-    # having just logged that it would run rules-only.
-    ner_model_id = MEMBER_NER_MODEL_ID if ner["ready"] else None
-
     with stage_run(chart_id, STAGE, force=force) as ctx:
         chart_name = ctx.chart_name
 
         with connect() as conn:
             manifest_rows = list_manifest_members(conn, chart_id=chart_id)
             bj_flags = get_blank_junk_flags(conn, chart_id, final_only=True)
-            texts = _ocr_text_map(conn, chart_id)
 
         # Every page blank/junk/duplicate → nothing to verify; skip and complete.
         all_blank_junk = bool(ctx.pages) and all(
@@ -262,7 +211,7 @@ def run(chart_id: int, *, force: bool = False) -> dict[str, Any]:
                         "chart_name": chart_name,
                         "final_status": "skipped",
                         "decision_reason": "all_blank_junk",
-                        "ner_enabled": MEMBER_NER_ENABLED,
+                        "ner_enabled": True,
                         "pages_checked": 0,
                         "pages_matched": 0,
                     }
@@ -359,7 +308,7 @@ def run(chart_id: int, *, force: bool = False) -> dict[str, Any]:
                         "chart_name": chart_name,
                         "final_status": "needs_review",
                         "decision_reason": "manifest_missing",
-                        "ner_enabled": MEMBER_NER_ENABLED,
+                        "ner_enabled": True,
                     }
                 ],
             )
@@ -422,7 +371,7 @@ def run(chart_id: int, *, force: bool = False) -> dict[str, Any]:
                         "chart_name": chart_name,
                         "final_status": "skipped",
                         "decision_reason": "all_blank_junk",
-                        "ner_enabled": MEMBER_NER_ENABLED,
+                        "ner_enabled": True,
                         "pages_checked": 0,
                         "pages_matched": 0,
                     }
@@ -436,11 +385,13 @@ def run(chart_id: int, *, force: bool = False) -> dict[str, Any]:
                 "skipped": ctx.skipped,
             }
 
+        # What the extraction found on each page. A page it could not read has no entry.
+        staged = ensure_staging(chart_id, chart_name)
         engine_pages = [
             {
                 "page_no": p.get("page_number") or 0,
                 "page_name": p["page_name"],
-                "text": texts.get(p["id"], ""),
+                "staged": staged.page(p["page_name"]),
                 "_page_id": p["id"],
             }
             for p in todo_pages
@@ -457,7 +408,7 @@ def run(chart_id: int, *, force: bool = False) -> dict[str, Any]:
             pages=engine_pages,
             expected=expected,
             name_mode=name_mode,
-            model_id=ner_model_id,
+            model_id=staged.model_version,
             total_pages=len(ctx.pages),
         )
 
@@ -535,9 +486,6 @@ def run(chart_id: int, *, force: bool = False) -> dict[str, Any]:
                 )
 
         final_status, reason = summary_status(result)
-        if not result.ner_enabled and reason not in {"manifest_name_incomplete"}:
-            # Make the limitation legible wherever the decision is read.
-            reason = f"{reason}|ner_disabled"
 
         with connect() as conn:
             upsert_member_summary(

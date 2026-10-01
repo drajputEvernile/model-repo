@@ -23,7 +23,7 @@ STAGE_FINAL1 = ("ocr_final1", 1)
 STAGE_FINAL2 = ("ocr_final2", 1)
 STAGE_BJ1 = ("blank_junk", 1)
 STAGE_BJ2 = ("blank_junk", 2)
-STAGE_HEADERS = ("section_headers", 1)
+STAGE_HEADERS = ("kv_extract", 1)
 STAGE_MEMBER = ("member_verify", 1)
 STAGE_DOS = ("dos_extract", 1)
 

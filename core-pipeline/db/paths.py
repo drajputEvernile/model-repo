@@ -106,6 +106,7 @@ def clear_chart_subdirs(
         "ocr": ocr_dir(chart_name),
         "imaging": imaging_dir(chart_name),
         "corrected-pages": root / "corrected-pages",
+        "staging": root / "staging",
     }
     for label in subdirs:
         folder = folder_for.get(label)

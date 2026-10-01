@@ -1,7 +1,8 @@
 """Stage: page sequencing (suggested order; does not reorder files).
 
 Ported from advantmed-document-processing ``adapters/sequencing``:
-explicit page markers → multi-stream split → header groups → optional
+explicit page markers (the printed page numbers the key/value
+extraction staged) → multi-stream split → header groups → optional
 cross-encoder continuation → cover pages last.
 
 Writes DB + ``imaging/<chart>_sequencing.csv``.
@@ -28,7 +29,9 @@ from stages._support import (
     mark_skipped,
     stage_run,
 )
+from stages.lib.extraction.stage import ensure_staging
 from stages.lib.sequencing import compute_sequence_assignments
+from stages.lib.sequencing.engine.types import ExplicitMarker
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +66,27 @@ def _ocr_source_label(
     return ""
 
 
+def _staged_marker(staged_page: Any) -> Optional[ExplicitMarker]:
+    """The printed page number the extraction chose on a page, as a sequencing marker."""
+    if staged_page is None:
+        return None
+    for row in staged_page.selected("page_no"):
+        try:
+            number = int(row.get("page_no") or 0)
+            total = int(row["page_total"]) if row.get("page_total") else None
+        except (TypeError, ValueError):
+            continue
+        if number < 1 or (total is not None and (total < 1 or number > total)):
+            continue
+        return ExplicitMarker(
+            page_num=number,
+            total_pages=total,
+            pattern="page_x_of_y" if total else "page_x",
+            confidence=1.0 if total else 0.85,
+        )
+    return None
+
+
 def run(chart_id: int, *, force: bool = False) -> dict[str, Any]:
     with stage_run(chart_id, STAGE, force=force) as ctx:
         with connect() as conn:
@@ -79,6 +103,8 @@ def run(chart_id: int, *, force: bool = False) -> dict[str, Any]:
             final1 = get_ocr_texts(conn, chart_id, "docling")
             final2 = get_ocr_texts(conn, chart_id, "azuredocintel")
             quality = get_quality_map(conn, chart_id)
+
+        staged = ensure_staging(chart_id, ctx.chart_name)
 
         # Sequencing needs the full main-page set (order is chart-global).
         seq_inputs: list[dict[str, Any]] = []
@@ -106,6 +132,9 @@ def run(chart_id: int, *, force: bool = False) -> dict[str, Any]:
                     "page_number": int(page.get("page_number") or 0),
                     "text": text,
                     "is_classified": is_bj,
+                    # A page the extraction could not read has no marker to find.
+                    "marker_extracted": True,
+                    "page_marker": _staged_marker(staged.page(page["page_name"])),
                 }
             )
 

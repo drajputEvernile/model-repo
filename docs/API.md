@@ -138,12 +138,12 @@ Copy-Item ..\.env.example ..\.env
 ```
 
 Optional pip extras (local venv). **Docker always installs
-`requirements-docling.txt`**; GLiNER remains a build-arg.
+`requirements-docling.txt` and `requirements-extraction.txt`.**
 
 | File | Enables |
 |---|---|
 | `requirements-docling.txt` | Docling + ConvNeXt HW **packages** (weights separate) |
-| `requirements-ner.txt` + model downloader | GLiNER / document **Rejected** |
+| `requirements-extraction.txt` | Key/value extraction (GLiNER, Heron, LightGBM) — **required**, see [EXTRACTION.md](EXTRACTION.md) |
 
 Key `.env` knobs (paths relative to `core-pipeline/`):
 
@@ -158,15 +158,15 @@ Key `.env` knobs (paths relative to `core-pipeline/`):
 | `RAPID_MODELS_DIR` | `models/rapidocr` |
 | `SECTION_HEADER_MINILM_PATH` | `models/semantic-model` — local MiniLM (preferred) |
 | `BLANK_JUNK_MODEL_DIR` | `models/blank-junk` — `tfidf_flat.joblib` + `default.json`. Missing file ⇒ regex rules only |
-| `MEMBER_NER_MODELS_PATH` | `models/ner` |
+| `EXTRACTION_MODELS_ROOT` | `models` — holds `gliner_low/`, `layout_heron/`, `kv_ranker/v002/`. The version is fixed at v002 in `config.py`, not an env setting |
 | `MODELS_HOST_PATH` | Docker only. Host folder mounted at `/app/core-pipeline/models`. Default `./models` |
 | `SECTION_HEADER_SEMANTIC_ENABLED` | `true` — filter Final1 `section_headers` ≥90% |
 | `DOCLING_TABLE_CELL_MATCHING` | `true` (default) — fill dense form table cells. Slower per page; Final1 falls back to RapidOCR-onnx only on a page timeout or a crash, never on short output. Set `false` for speed. Unrelated to the section-header RLock deadlock. |
 | `DOCLING_IMAGES_SCALE` | `1.0` — keep at 1 for page images (`2` halves overlay boxes) |
-| `MEMBER_NER_ENABLED` | `false` until GLiNER is installed |
 
-Azure Blob / DocIntel / OpenAI are optional — missing ones degrade a stage in a
-way the run records (`GET /health` names the gap).
+Azure Blob / DocIntel are optional — missing ones degrade a stage in a
+way the run records (`GET /health` names the gap). The key/value extraction is not
+optional: without its packages or weights the `kv_extract` stage fails the chart.
 
 Blob auth modes (`AZURE_STORAGE_AUTH`):
 
@@ -194,7 +194,7 @@ HW_MODEL_PATH=models/hw/handwritten_printed_convnext_tiny.pth
 RAPID_MODELS_DIR=models/rapidocr
 SECTION_HEADER_MINILM_PATH=models/semantic-model
 BLANK_JUNK_MODEL_DIR=models/blank-junk
-MEMBER_NER_MODELS_PATH=models/ner
+EXTRACTION_MODELS_ROOT=models
 ```
 
 `blank-junk/` (`tfidf_flat.joblib` + `default.json`) is in git. The other
@@ -213,7 +213,9 @@ models/rapidocr/
   PP-OCRv6_rec_small.pth
   ch_ptocr_mobile_v2.0_cls_mobile.pth
   ppocrv6_dict.txt
-models/ner/               # GLiNER via model_downloader
+models/gliner_low/        # GLiNER (key/value extraction)
+models/layout_heron/      # Heron heading detector
+models/kv_ranker/v002/    # trained extraction ranker (in git)
 models/semantic-model/    # MiniLM — section_header_match --download
 models/blank-junk/        # tfidf_flat.joblib + default.json (in git; path is BLANK_JUNK_MODEL_DIR)
 ```
@@ -241,33 +243,29 @@ Stage 1 also applies the preprocessing rule **Handwritten + High → Medium** on
 |---|---|
 | ConvNeXt `.pth` / torch | RandomForest `models/hw/image_type_classification.pkl` |
 | RapidOCR four files | **rapidocr-onnxruntime** (base `requirements.txt`) |
-| GLiNER | rules-only member verify — **no chart can be Rejected** |
+| GLiNER / Heron / `kv_ranker` | the `kv_extract` stage fails the chart, naming the missing folder |
 | MiniLM / sentence-transformers | lexical header match (same 0.90 threshold) |
 | `BLANK_JUNK_MODEL_DIR` / sklearn | regex blank/junk rules; reason starts with `regex_fallback:` |
 
 ### Section-header MiniLM
 
-Used by the ``section_headers`` stage to filter candidates in
-``*_final1.json`` / ``*_final2.json`` (≥90% match to
-`stages/lib/keyword-canon/section_header_canon.json`). OCR stores raw candidates;
-re-run only that stage after editing the list — no re-OCR:
+OCR (Final1/Final2) still pre-filters header candidates against
+`stages/lib/keyword-canon/section_header_canon.json`, but the `section_headers` of the
+OCR JSON are now written by the `kv_extract` stage (Heron detector + trained model), which
+replaces them. Re-run only that stage — no re-OCR:
 
 ```bash
 # API
 curl -X POST localhost:8001/api/charts/run -H 'Content-Type: application/json' \
-  -d '{"chart_id": 123, "only": ["section_headers"]}'
+  -d '{"chart_id": 123, "only": ["kv_extract"]}'
 
 # CLI
-python cli.py run --chart-id 123 --only section_headers
+python cli.py run --chart-id 123 --only kv_extract
 ```
 
-**Existing databases** (schema already applied): insert the new stage row once:
-
-```sql
-INSERT INTO pipeline_stage (stage_name, pass_no, seq, label, is_phase1)
-VALUES ('section_headers', 1, 55, 'Section Header Match', TRUE)
-ON CONFLICT (stage_name, pass_no) DO NOTHING;
-```
+**Existing databases** (schema already applied): rename the stage once with
+`psql "$DATABASE_URL" -f schema/patch_kv_extract_stage.sql` (same position, `kv_extract`;
+safe to run twice).
 
 **Recommended: keep weights under `models/semantic-model/`** (gitignored):
 
@@ -326,28 +324,12 @@ curl.exe -L -o models\rapidocr\ppocrv6_dict.txt "$base/paddle/PP-OCRv6/rec/PP-OC
 pip install -r requirements-docling.txt
 ```
 
-### GLiNER
+### Key/value extraction (GLiNER, Heron, trained ranker)
 
-Ids: `gliner_low` (smallest) · `gliner_medium` (default) · `gliner_large`.
-
-Prefer setting these in `core-pipeline/.env` (not a shell `export`) so Docker
-Compose cannot pick up a different value from the host environment.
-
-```bash
-# macOS / Linux
-pip install -r requirements-ner.txt
-# in .env: MEMBER_NER_MODEL_ID=gliner_medium
-python -m stages.lib.member.extractors.ner_based.model_downloader
-# in .env: MEMBER_NER_ENABLED=true
-```
-
-```powershell
-# Windows
-pip install -r requirements-ner.txt
-# in .env: MEMBER_NER_MODEL_ID=gliner_medium
-python -m stages.lib.member.extractors.ner_based.model_downloader
-# in .env: MEMBER_NER_ENABLED=true
-```
+See [EXTRACTION.md](EXTRACTION.md). Packages: `pip install -r requirements-extraction.txt`.
+Weights go under `models/` (`gliner_low/`, `layout_heron/`, `kv_ranker/v002/`); the two public
+models can be fetched at their pinned revisions with
+`python -m stages.lib.extraction.util.model_setup`.
 Confirm:
 
 ```bash
@@ -360,7 +342,7 @@ curl -s localhost:8001/health | python -m json.tool
 curl.exe -s localhost:8001/health | python -m json.tool
 ```
 
-Check `docling_final1.ready`, `blank_junk_model.ready`, and `member_ner.ready`.
+Check `docling_final1.ready`, `blank_junk_model.ready`, and `extraction.ready`.
 `blank_junk_model.path` is the `tfidf_flat.joblib` under `BLANK_JUNK_MODEL_DIR`.
 
 ---
@@ -439,7 +421,7 @@ Mutating chart calls return **202** and run in the background. Poll
 `GET /api/charts/{id}` or `GET /api/charts/by-name/{name}`.
 
 Stage names: `ocr_quality`, `ocr_prelim`, `blank_junk`, `ocr_final1`,
-`ocr_final2`, `section_headers`, `member_verify`, `dos_extract`, `page_subtype`,
+`ocr_final2`, `kv_extract`, `member_verify`, `dos_extract`, `page_subtype`,
 `encounter_type`, `page_sequencing`. Pass 2: `blank_junk:2`.
 Unknown name → **400**.
 
@@ -680,21 +662,8 @@ docker compose up -d --build
 curl -s localhost:8001/health | python -m json.tool   # docling_final1.ready
 ```
 
-NER (rejection) still needs the GLiNER runtime at build + checkpoints under
-`models/ner/`:
-
-```bash
-# macOS / Linux
-docker compose build --build-arg WITH_NER=true
-MEMBER_NER_ENABLED=true docker compose up -d
-```
-
-```powershell
-# Windows
-docker compose build --build-arg WITH_NER=true
-$env:MEMBER_NER_ENABLED = "true"
-docker compose up -d
-```
+The key/value extraction packages are always in the image; its weights come from the
+`models/` mount (`gliner_low/`, `layout_heron/`, `kv_ranker/v002/`).
 
 ---
 
@@ -731,7 +700,7 @@ variable is set, otherwise `core-pipeline/models/blank-junk/`.
 | Chart stuck at `ocr_prelim` | Install tesseract / set `TESSERACT_CMD` |
 | `final2` empty | Set Azure DI endpoint + key |
 | `manifest_missing` | Sweep manifest, then `rerun` with `only: ["member_verify"]` |
-| No Rejected / `ner_disabled` | `GET /health` → `member_ner.reason` |
+| `kv_extract` fails | `GET /health` → `extraction.reason` names the missing package or folder |
 | Python 3.13 pip failure | Use 3.12 (`py -3.12` on Windows) |
 | PowerShell `curl` oddities | Use `curl.exe` |
 | `BASE is not recognized` | Bash-only; use `$base = "..."` in PowerShell |

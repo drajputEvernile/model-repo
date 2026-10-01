@@ -1,0 +1,247 @@
+{
+  "test": null,
+  "train_optimistic": {
+    "fields": {
+      "dob": {
+        "trained": true,
+        "v0": {
+          "pages": 49,
+          "right": 52,
+          "wrong": 1,
+          "missed": 0,
+          "accuracy": 98.1,
+          "precision": 98.1,
+          "recall": 100.0,
+          "false_positives": 0,
+          "candidate_recall": 100.0
+        },
+        "model": {
+          "pages": 49,
+          "right": 52,
+          "wrong": 0,
+          "missed": 0,
+          "accuracy": 100.0,
+          "precision": 100.0,
+          "recall": 100.0,
+          "false_positives": 0,
+          "candidate_recall": 100.0
+        }
+      },
+      "member_id": {
+        "trained": true,
+        "v0": {
+          "pages": 49,
+          "right": 77,
+          "wrong": 0,
+          "missed": 2,
+          "accuracy": 97.5,
+          "precision": 100.0,
+          "recall": 97.5,
+          "false_positives": 0,
+          "candidate_recall": 97.1
+        },
+        "model": {
+          "pages": 49,
+          "right": 77,
+          "wrong": 0,
+          "missed": 2,
+          "accuracy": 97.5,
+          "precision": 100.0,
+          "recall": 97.5,
+          "false_positives": 0,
+          "candidate_recall": 97.1
+        }
+      },
+      "name": {
+        "trained": true,
+        "v0": {
+          "pages": 49,
+          "right": 63,
+          "wrong": 1,
+          "missed": 1,
+          "accuracy": 96.9,
+          "precision": 98.4,
+          "recall": 98.4,
+          "false_positives": 0,
+          "candidate_recall": 98.4
+        },
+        "model": {
+          "pages": 49,
+          "right": 63,
+          "wrong": 0,
+          "missed": 1,
+          "accuracy": 98.4,
+          "precision": 100.0,
+          "recall": 98.4,
+          "false_positives": 0,
+          "candidate_recall": 98.4
+        }
+      },
+      "provider_name": {
+        "trained": true,
+        "v0": {
+          "pages": 49,
+          "right": 55,
+          "wrong": 1,
+          "missed": 0,
+          "accuracy": 98.2,
+          "precision": 98.2,
+          "recall": 100.0,
+          "false_positives": 0,
+          "candidate_recall": 100.0
+        },
+        "model": {
+          "pages": 49,
+          "right": 55,
+          "wrong": 0,
+          "missed": 0,
+          "accuracy": 100.0,
+          "precision": 100.0,
+          "recall": 100.0,
+          "false_positives": 0,
+          "candidate_recall": 100.0
+        }
+      },
+      "electronic_signature": {
+        "trained": true,
+        "v0": {
+          "pages": 49,
+          "right": 49,
+          "wrong": 0,
+          "missed": 0,
+          "accuracy": 100.0,
+          "precision": 100.0,
+          "recall": 100.0,
+          "false_positives": 0,
+          "candidate_recall": 100.0
+        },
+        "model": {
+          "pages": 49,
+          "right": 49,
+          "wrong": 0,
+          "missed": 0,
+          "accuracy": 100.0,
+          "precision": 100.0,
+          "recall": 100.0,
+          "false_positives": 0,
+          "candidate_recall": 100.0
+        }
+      },
+      "dos": {
+        "trained": true,
+        "v0": {
+          "pages": 49,
+          "right": 94,
+          "wrong": 3,
+          "missed": 2,
+          "accuracy": 94.9,
+          "precision": 96.9,
+          "recall": 97.9,
+          "false_positives": 0,
+          "candidate_recall": 98.9
+        },
+        "model": {
+          "pages": 49,
+          "right": 94,
+          "wrong": 0,
+          "missed": 2,
+          "accuracy": 97.9,
+          "precision": 100.0,
+          "recall": 97.9,
+          "false_positives": 0,
+          "candidate_recall": 98.9
+        }
+      },
+      "page_no": {
+        "trained": true,
+        "v0": {
+          "pages": 49,
+          "right": 49,
+          "wrong": 1,
+          "missed": 1,
+          "accuracy": 96.1,
+          "precision": 98.0,
+          "recall": 98.0,
+          "false_positives": 1,
+          "candidate_recall": 97.4
+        },
+        "model": {
+          "pages": 49,
+          "right": 50,
+          "wrong": 0,
+          "missed": 1,
+          "accuracy": 98.0,
+          "precision": 100.0,
+          "recall": 98.0,
+          "false_positives": 0,
+          "candidate_recall": 97.4
+        }
+      },
+      "heading_heron": {
+        "trained": true,
+        "v0": {
+          "pages": 49,
+          "tp": 168,
+          "fp": 132,
+          "fn": 53,
+          "level_ok": 165,
+          "right": 165,
+          "wrong": 135,
+          "missed": 53,
+          "accuracy": 46.7,
+          "precision": 56.0,
+          "recall": 76.0,
+          "level_accuracy": 98.2,
+          "page_accuracy": 6.1
+        },
+        "model": {
+          "pages": 49,
+          "tp": 217,
+          "fp": 2,
+          "fn": 4,
+          "level_ok": 217,
+          "right": 217,
+          "wrong": 2,
+          "missed": 4,
+          "accuracy": 97.3,
+          "precision": 99.1,
+          "recall": 98.2,
+          "level_accuracy": 100.0,
+          "page_accuracy": 91.8
+        }
+      }
+    },
+    "kv_overall": {
+      "v0": {
+        "right": 439,
+        "wrong": 7,
+        "missed": 6,
+        "pages": 343,
+        "accuracy": 97.1
+      },
+      "model": {
+        "right": 440,
+        "wrong": 0,
+        "missed": 6,
+        "pages": 343,
+        "accuracy": 98.7
+      }
+    },
+    "overall": {
+      "v0": {
+        "right": 604,
+        "wrong": 142,
+        "missed": 59,
+        "pages": 392,
+        "accuracy": 75.0
+      },
+      "model": {
+        "right": 657,
+        "wrong": 2,
+        "missed": 10,
+        "pages": 392,
+        "accuracy": 98.2
+      }
+    }
+  }
+}

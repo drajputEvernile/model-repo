@@ -258,15 +258,6 @@ class TestCombinedOcrFormat:
         finally:
             config.DATA_ROOT = original_root
 
-    def test_dos_splitter_reads_the_same_marker(self):
-        """The DOS driver splits pages itself; it must agree with the writer."""
-        from dos_logic import UI_PAGE_MARKER_RE, split_ocr_into_pages
-
-        text = "===== 1.jpg =====\nalpha\n\n===== 2.jpg =====\nbeta\n"
-        pages = split_ocr_into_pages(text)
-        assert [p["page_name"] for p in pages] == ["1.jpg", "2.jpg"]
-        assert UI_PAGE_MARKER_RE.search(text) is not None
-
 
 # --- stage registry consistency --------------------------------------------
 
@@ -931,27 +922,19 @@ class TestStageSelection:
 # --- operator-facing behaviour -----------------------------------------------
 
 
-class TestNerFallsBackInsteadOfCrashing:
-    """A rules-only run must actually run, not raise ModelLoadError.
+class TestMemberStageReadsTheExtraction:
+    """Member details are extracted once, right after OCR; verification only reads them."""
 
-    The stage logs "NER layer INACTIVE — rules-only" from ner_status()["ready"],
-    but the model_id it passed to the engine was gated on MEMBER_NER_ENABLED
-    alone. With the flag true and checkpoints absent it announced rules-only and
-    then called NER anyway, killing the chart after five completed stages.
-    """
-
-    def test_model_id_is_gated_on_ready_not_on_the_flag(self):
+    def test_member_stage_takes_staged_pages_not_page_text(self):
         src = (
             REPO_ROOT / "core-pipeline" / "stages" / "lib" / "member" / "stage.py"
         ).read_text(encoding="utf-8")
-        assert "ner_model_id = MEMBER_NER_MODEL_ID if ner[\"ready\"] else None" in src
-        assert "model_id=ner_model_id," in src
-        assert "MEMBER_NER_MODEL_ID if MEMBER_NER_ENABLED else None" not in src
+        assert "ensure_staging(chart_id, chart_name)" in src
+        assert '"staged": staged.page(p["page_name"])' in src
+        assert "MEMBER_NER" not in src and "_ocr_text_map" not in src
 
     def test_no_stale_downloader_command_in_any_message(self):
         """The old path stopped existing when Reference/ was deleted."""
-        import re
-
         offenders = []
         for path in repo_python_files(REPO_ROOT / "core-pipeline"):
             text = path.read_text(encoding="utf-8")
@@ -1529,24 +1512,22 @@ class TestCapabilityReporting:
             "blank/junk model",
             "final1 Docling",
             "final2 OCR",
-            "DOS LLM",
-            "member NER",
+            "key/value extraction",
             "skip OCR",
         ]
         assert "hw_model" in snapshot
         assert "rapidocr_models" in snapshot
         assert "blank_junk_model" in snapshot
 
-    def test_health_still_exposes_member_ner_at_the_top_level(self, monkeypatch):
-        """docs and review-ui read `member_ner.ready`; moving it would be a
-        silent break."""
+    def test_health_exposes_extraction_at_the_top_level(self, monkeypatch):
+        """The key/value extraction replaced the member NER and DOS LLM entries."""
         from fastapi.testclient import TestClient
 
         import api.main as main
 
         client = TestClient(main.app, raise_server_exceptions=False)
         body = client.get("/health").json()
-        assert "member_ner" in body and "ready" in body["member_ner"]
+        assert "extraction" in body and "ready" in body["extraction"]
         assert "blob" in body
 
 

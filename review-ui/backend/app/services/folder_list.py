@@ -46,7 +46,8 @@ _CHART_STATUS_TO_OCR: dict[str, str] = {
     "blank_junk": "IMAGING_IN_PROGRESS",
     "ocr_final1": "IN_PROGRESS",
     "ocr_final2": "IN_PROGRESS",
-    "section_headers": "IMAGING_IN_PROGRESS",
+    "section_headers": "IMAGING_IN_PROGRESS",  # charts run before kv_extract replaced it
+    "kv_extract": "IMAGING_IN_PROGRESS",
     "member_verify": "IMAGING_IN_PROGRESS",
     "dos_extract": "IMAGING_IN_PROGRESS",
     "page_subtype": "IMAGING_IN_PROGRESS",

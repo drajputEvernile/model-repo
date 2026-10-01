@@ -1,0 +1,22 @@
+{
+  "member_id": [
+    "Member ID", "Member Id#", "Member #", "Member Number", "Subscriber ID", "Subscriber #",
+    "Insurance #", "Insurance#", "Insurance ID", "Insured ID", "Insured Policy ID",
+    "Policy", "Policy #", "Policy#", "Policy/Group #", "Pol #", "Pol#", "Pri Ins Policy", "Pri Ins Policy#",
+    "ID", "ID#", "id #"
+  ],
+  "mrn": [
+    "MRN", "MRN:", "Patient MRN", "CERNER MRN", "MR#", "MAN", "MARK", "MEN", "MRK",
+    "Medical Rec #", "MEDICAL REC. NO", "MEDICAL REC. NO.", "Medical Record Number", "Medical Record #",
+    "Chart #", "Chart#", "CHART#", "EMPI#", "EMP#", "EMP##", "Unit#", "Record Num",
+    "Patient ID", "Patient #", "Patient Number", "Patlent-#", "PMS 10", "PMS ID", "PMS IDX", "PN", "PRN"
+  ],
+  "ssn": ["SSN", "SS#", "Social Security #", "Social Security Number"],
+  "encounter": [
+    "Encounter#", "Encounter #", "Encounter Number", "Visit #", "Visit Number", "CSN",
+    "Account", "ACCOUNT", "Account #", "Account No", "ACCOUNT NO", "ACCOUNT NO.", "Account Number",
+    "ACCOUNT NUMBER", "Account Number:", "Acct", "Acct #", "Acct#", "Acc No", "Acc No.",
+    "FIN", "FIN #", "Financial Number"
+  ],
+  "other": ["Accession #", "PATH #", "PROVIDER #", "Report#", "Payer ID", "CHASE ID"]
+}

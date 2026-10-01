@@ -1,0 +1,69 @@
+[
+  {
+    "role": "Physician",
+    "aliases": [
+      "Physician",
+      "PHYSICIAN",
+      "Attending",
+      "Attending Physician",
+      "ATTENDING PHYSICIAN",
+      "Att Phys",
+      "Attend/ER PHYS",
+      "Ordering Physician",
+      "Diagnosing Physician",
+      "INTERPRETING PHYSICIAN",
+      "CONSULTING PHYSICIAN",
+      "Primary Care Physician",
+      "PRIMARY CARE PHYSICIAN",
+      "PRIM Care PHYS"
+    ]
+  },
+  {
+    "role": "Nurse Practitioner",
+    "aliases": [
+      "Nurse Practitioner"
+    ]
+  },
+  {
+    "role": "CRNA",
+    "aliases": [
+      "crna"
+    ]
+  },
+  {
+    "role": "Pathologist",
+    "aliases": [
+      "Pathologist"
+    ]
+  },
+  {
+    "role": "Anesthesiologist",
+    "aliases": [
+      "Anesthesiologist"
+    ]
+  },
+  {
+    "role": "Psychologist",
+    "aliases": [
+      "Psychologist"
+    ]
+  },
+  {
+    "role": "Optometrist",
+    "aliases": [
+      "optometrist"
+    ]
+  },
+  {
+    "role": "Surgeon",
+    "aliases": [
+      "surgeon"
+    ]
+  },
+  {
+    "role": "Resident",
+    "aliases": [
+      "Resident"
+    ]
+  }
+]

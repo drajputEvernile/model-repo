@@ -101,6 +101,11 @@ def _explicitness(m: ExplicitMarker) -> tuple:
 
 
 def _all_candidates(feature: PageFeatures) -> list[ExplicitMarker]:
+    if feature.marker_extracted:
+        if feature.extracted_marker is None:
+            return []
+        feature.extracted_marker.source = "extracted"
+        return [feature.extracted_marker]
     candidates: list[ExplicitMarker] = []
     footer_marker = detect_footer_marker(feature.footer_raw)
     if footer_marker:

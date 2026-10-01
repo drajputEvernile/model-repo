@@ -77,9 +77,9 @@ curl -fsS localhost:8001/api/stages | python -m json.tool
 | `blank_junk` / `blank_junk:2` | Junk pass 1 / pass 2 | No |
 | `ocr_final1` | RapidOCR / Docling | No |
 | `ocr_final2` | Azure Document Intelligence | **Yes — per page** |
-| `section_headers` | Canon match on OCR JSON | No |
+| `kv_extract` | Member / DOS / page number / headings from the OCR word boxes — see [EXTRACTION.md](EXTRACTION.md) | No |
 | `member_verify` | Member extract + verify | No |
-| `dos_extract` | Date of service | No (LLM optional) |
+| `dos_extract` | Date of service | No |
 | `page_subtype` | Codeable / Non Codeable / Discharge Frequency | No |
 | `encounter_type` | Outpatient F2F / Tele / Inpatient / Home | No |
 | `page_sequencing` | Suggested page order | No |
@@ -311,9 +311,9 @@ Poll: `GET /api/charts/by-name/{chart_name}` (blob) / `GET /api/charts/{id}` (lo
 
 | Goal | `only` |
 |---|---|
-| Section headers (after editing `section_header_canon.json`) | `["section_headers"]` |
+| Extraction + headings (after changing the model version) | `["kv_extract"]` |
 | Blank/junk pass 2 | `["blank_junk:2"]` |
-| Member verification (e.g. after enabling NER) | `["member_verify"]` |
+| Member verification (reads the staged extraction; re-runs it if the chart already completed) | `["member_verify"]` |
 | DOS only | `["dos_extract"]` |
 | Codeable only | `["page_subtype"]` |
 | Encounter only | `["encounter_type"]` |
@@ -326,7 +326,7 @@ curl -X POST localhost:8001/api/charts/run -H 'Content-Type: application/json' \
     "container_name": "imaging-pipeline",
     "input_path": "Raw_Input/Run1/Batch1/DEID_PNGs",
     "chart_name": "52743839_44976074",
-    "only": ["section_headers"],
+    "only": ["kv_extract"],
     "output_path": "Processed/Run1"
   }'
 ```
@@ -345,7 +345,7 @@ curl -X POST localhost:8001/api/charts/run -H 'Content-Type: application/json' \
     "input_path": "Raw_Input/Run1/Batch1/DEID_PNGs",
     "chart_name": "52743839_44976074",
     "only": [
-      "section_headers",
+      "kv_extract",
       "blank_junk:2",
       "member_verify",
       "dos_extract",
@@ -367,7 +367,7 @@ curl -X POST localhost:8001/api/charts/batch-run -H 'Content-Type: application/j
     "input_path": "Raw_Input/Run1/Batch1/DEID_PNGs",
     "output_path": "Processed/Run1",
     "only": [
-      "section_headers",
+      "kv_extract",
       "blank_junk:2",
       "member_verify",
       "dos_extract",

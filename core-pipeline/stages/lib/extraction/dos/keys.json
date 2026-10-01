@@ -1,0 +1,55 @@
+{
+  "service": [
+    "DOS",
+    "Date of Service",
+    "Service Date",
+    "Service Date/Time",
+    "Visit Date",
+    "Visit Date of service",
+    "Encounter Date",
+    "Encounter",
+    "Exam Date",
+    "Date of Exam",
+    "Treatment Date",
+    "Appt. Date/Time",
+    "Appt Date",
+    "Office Visit on",
+    "Clinic Visit",
+    "Visit Note",
+    "Date of Consultation",
+    "Admit Date/Date of Service",
+    "Registration Date",
+    "Reg Dt/Tm",
+    "Est Dt/Tm",
+    "OccDt",
+    "Collection Date",
+    "Order Date"
+  ],
+  "admit": [
+    "Admit",
+    "Admitted",
+    "Admit Date",
+    "Admission Date",
+    "Admission Date/Time",
+    "Admit Inpatient Date/Time",
+    "Start Time"
+  ],
+  "discharge": [
+    "Disch",
+    "Discharged",
+    "Discharge Date",
+    "Discharge Date/Time",
+    "End Time"
+  ],
+  "weak": [
+    "Date",
+    "dd",
+    "dt",
+    "Report Date",
+    "Received",
+    "Service",
+    "Chief Complaint",
+    "Chief Complaint/Reason For Visit",
+    "PSFH/ROS Updated Date"
+  ]
+}

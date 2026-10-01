@@ -6,7 +6,7 @@ reference's.
 """
 from __future__ import annotations
 
-from ..extractors.rule_based.name_common import (
+from .name_common import (
     BOTH_FULL,
     INITIAL,
     classify_two_word_name,

@@ -58,6 +58,10 @@ core-pipeline/models/**
 core-pipeline/models/blank-junk/bert_page/
 # The negation above re-includes macOS AppleDouble files; exclude them again.
 core-pipeline/models/blank-junk/._*
+# Trained extraction ranker (~1 MB of LightGBM text). The GLiNER and Heron weights beside it
+# stay ignored: gliner_low/ and layout_heron/ are copied in or fetched by util/model_setup.py.
+!core-pipeline/models/kv_ranker/
+!core-pipeline/models/kv_ranker/**
 *.safetensors
 *.onnx
 *.bin
@@ -74,3 +78,6 @@ core-pipeline/logs/**
 # key, a connection string or a SAS token. The venv is not.
 test-connection/.venv/
 !test-connection/.env
+
+# Extraction training tools' working data (reviewed runs, datasets); the pipeline never writes it.
+core-pipeline/data/

@@ -4,7 +4,7 @@ Only the imports changed (relative instead of sys.path inserts).
 """
 from __future__ import annotations
 
-from ..extractors.rule_based.name_common import (
+from .name_common import (
     ALL_FULL,
     TWO_FULL,
     classify_three_word_name,

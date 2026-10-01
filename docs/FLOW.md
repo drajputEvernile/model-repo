@@ -63,10 +63,10 @@ flowchart TD
     S3["3 · blank_junk pass 1<br/>printed pages, prelim text"]
     S4["4 · ocr_final1<br/>Docling+RapidOCR"]
     S5["5 · ocr_final2<br/>Azure DocIntel · billed"]
-    S5b["6 · section_headers<br/>canon match from JSON"]
+    S5b["6 · kv_extract<br/>member · DOS · page no · headings → staging"]
     S6["7 · blank_junk pass 2<br/>handwritten + survivors"]
-    S7["8 · member_verify<br/>rules → NER → what-if"]
-    S8["9 · dos_extract<br/>regex → LLM → carry-forward"]
+    S7["8 · member_verify<br/>staged fields → rules → what-if"]
+    S8["9 · dos_extract<br/>staged dates → encounter spans"]
     S9["10 · page_subtype<br/>TF codeable / continue-until-DOS"]
     S10["11 · encounter_type<br/>F2F / Tele / IP / Home per DOS"]
     S11["12 · page_sequencing<br/>markers → streams → suggested order"]
@@ -93,13 +93,13 @@ Stages 5 and 7 are highlighted: **stage 5 costs money per page** (which is why
 | 3 | `blank_junk` pass 1 | printed + non-low-quality only | prelim text | `blank_junk_classification` (pass 1) | `imaging/<chart>_junk.csv` |
 | 4 | `ocr_final1` | not blank/junk, + HW / low-quality | corrected page if one exists, else page image | `ocr_results` (`docling`) | `ocr/<chart>_final1.json` (incl. `section_header_candidates`) |
 | 5 | `ocr_final2` | not blank/junk, + HW / low-quality; **skips high-quality printed** | corrected page if one exists, else page image | `ocr_results` (`azuredocintel`) | `ocr/<chart>_final2.json` (incl. candidates / `pagesMeta`) |
-| 6 | `section_headers` | pages with Final1 or Final2 JSON | those JSON files | updates `ocr_results` JSON blobs | rewrites `section_headers` in `*_final1.json` / `*_final2.json` |
+| 6 | `kv_extract` | pages with Final2 word boxes (see [EXTRACTION.md](EXTRACTION.md)) | `ocr_results` (`azuredocintel`) + the page image | headings into the `ocr_results` JSON blobs | `staging/extraction.json` (dropped when the chart completes); `section_headers` in `*_final1.json` / `*_final2.json` |
 | 7 | `blank_junk` pass 2 | HW + low-quality + surviving printed | final2 text, else final1 | `blank_junk_classification` (pass 2), then `is_final` stamped | rewrites `_junk.csv` |
-| 8 | `member_verify` | not blank/junk/duplicate | best text + `manifest_member_list` | `member_extraction_results`, `member_verification_summary` | `_member_extraction.csv`, `_member_verification.csv`, `_member_v1_compare.csv` |
-| 9 | `dos_extract` | not blank/junk/duplicate | best text | `dos_extraction_results` | `imaging/<chart>_dos.csv` |
+| 8 | `member_verify` | not blank/junk/duplicate | staged name / DOB / ID + `manifest_member_list` | `member_extraction_results`, `member_verification_summary` | `_member_extraction.csv`, `_member_verification.csv`, `_member_v1_compare.csv` |
+| 9 | `dos_extract` | not blank/junk/duplicate | staged dates + best text (page type) | `dos_extraction_results` | `imaging/<chart>_dos.csv` |
 | 10 | `page_subtype` | every page | best text + DOS + blank/junk | `page_classification` (main = TF; blank/junk/dup = `non_codeable` + junk subtype) | `imaging/<chart>_codeable.csv` |
 | 11 | `encounter_type` | not blank/junk/duplicate | best text + DOS | `encounter_type_results` | `imaging/<chart>_encounter.csv` |
-| 12 | `page_sequencing` | all pages (junk flagged) | best text | `page_sequencing_results` | `imaging/<chart>_sequencing.csv` |
+| 12 | `page_sequencing` | all pages (junk flagged) | best text + staged printed page numbers | `page_sequencing_results` | `imaging/<chart>_sequencing.csv` |
 
 Every stage also writes one `pipeline_jobs` row and updates
 `page_stage_status` per page.

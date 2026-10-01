@@ -260,54 +260,34 @@ Member/DOS then use final1 (and prelim only for printed non-low-quality pages).
 
 ## 5. Member verification
 
-**Source:** V1 `Member_Verification/` (~2,800 lines) → `core-pipeline/stages/lib/member/`
+**Source:** V1 `Member_Verification/` → `core-pipeline/stages/lib/member/`
 **Stage:** `stages/lib/member/stage.py`
 
-This stage produces the accept/reject decision. It is a faithful port — function
-names, call order and thresholds match the reference so a run is diffable
-against it page for page.
+This stage produces the accept/reject decision. The verification is a faithful port —
+function names, call order and thresholds match the reference so a run is diffable
+against it page for page. What changed is where a page's name, DOB and ID come from:
+the key/value extraction ([EXTRACTION.md](EXTRACTION.md)) reads them once, right after
+OCR, and this stage checks what it staged.
 
-### The central idea: expected-member driven
+### The central idea: extract once, verify against the manifest
 
-The pipeline does **not** extract a name from the page and then compare it. It
-takes the manifest's first / middle / last / DOB / MemberID and **searches the
-page for those specific values**. That is why `manifest_member_list` stores name
-parts separately — `classify_two_word_name` matches first and last
-independently, and a single joined string cannot drive it.
-
-### Per-page algorithm
+The extraction does not know the manifest. It finds the member name, DOB and ID on
+every page wherever the page keeps them (`name`, `dob`, `member_id`). Verification then
+asks, per page, whether what was extracted is *this* member:
 
 ```mermaid
 flowchart TD
-  START["Page text + expected member"] --> NAME
-
-  subgraph NAME["Name"]
-    N1["find_two_word_name / find_three_word_name<br/>over the whole page"]
-    N1 --> N2{"found?"}
-    N2 -- yes --> NR["source = rule based"]
-    N2 -- no --> N3["NER: build the sentence around each<br/>patient-name key, read it"]
-    N3 --> NN["source = ner"]
-  end
-
-  NAME --> DOB
-  subgraph DOB["DOB"]
-    D1["extract_dob — the three parts<br/>adjacent, any supported order"]
-    D1 --> D2{"found?"} -- no --> D3["NER on date-of-birth key sentences"]
-  end
-
-  DOB --> MID
-  subgraph MID["MemberID"]
-    M1["extract_member_id — exact value,<br/>not a substring of a longer token"]
-    M1 --> M2{"found?"} -- no --> M3["NER on member-id key sentences"]
-  end
-
-  MID --> VER["verify_page()"]
+  ST["Staged page: member names, DOBs, IDs the extraction accepted"] --> NAME
+  NAME["Name: the extracted name that matches the manifest,<br/>else the one the extraction selected"] --> DOB
+  DOB["DOB present = an extracted DOB says the manifest's<br/>(date_parts_match, or the same calendar day)"] --> MID
+  MID["Member ID present = an extracted ID contains the manifest's<br/>exactly, not inside a longer token"] --> VER["verify_page()"]
   VER --> COMB{"combine_evidences"}
   COMB --> PS["page_status"]
 ```
 
-Rules run first over the whole page; **NER is reached only for a field the rules
-missed**. A page the rules already matched costs no model time.
+A page the extraction could not read (no Final2 word boxes) finds nothing: it is
+not verified, and not wrong either. `detection_source_*` is `ner` when GLiNER read the
+value and `rule_based` otherwise; `ner_key_source_*` is the key it was found under.
 
 ### The verification rule (`rules/base_rules.py`)
 
@@ -337,7 +317,7 @@ given name is classified `ONE_FULL_WRONG`, not "partial match".
 ```mermaid
 flowchart TD
   V{"verify_page()"} -- Accept --> VER["**Verified**"]
-  V -- Reject --> W{"wrong_member_on_page():<br/>did NER read names off this page,<br/>and does none of them match?"}
+  V -- Reject --> W{"wrong_member_on_page():<br/>did the extraction find member names on this page,<br/>and does none of them match?"}
   W -- yes --> WM["**Wrong_Member**"]
   W -- "no names read" --> NV["**Not_Verified**"]
   W -- "a name matched" --> NV
@@ -368,60 +348,13 @@ that reached this stage — blank/junk pages are excluded from checking but stil
 count toward the document's size. Pinned by
 `test_threshold_uses_the_whole_document_not_the_subset`.
 
-### ⚠️ The NER layer and what turning it off costs
+### Wrong member needs the extraction
 
-`wrong_member_on_page()` decides from the names the NER layer read out of the
-page's patient-name sentences. **With `MEMBER_NER_ENABLED=false`:**
-
-- no page can ever be classified `wrong_member`;
-- therefore `wrong_member_pages` is always 0;
-- therefore **no document can ever be Rejected**;
-- and a field the rules missed is never recovered, so recall is lower.
-
-This is not a silent degradation. Every row carries `ner_enabled`, and the
-summary's `decision_reason` is suffixed `|ner_disabled`. `GET /health` reports
-it too.
-
-#### Turning it on
-
-The NER **code** is fully ported — `model.py`, `catalog.py`, `keys.py`,
-`name.py`, `dob.py`, `member_id.py` and the model downloader. Two things are not
-vendored, because neither belongs in a git repository:
-
-1. **The runtime** — `gliner`, `torch`, `transformers` (~2.5 GB installed).
-   Kept out of `requirements.txt` so the base image stays small.
-2. **The checkpoints** — ~2 GB of weights.
-
-```bash
-# 1. Runtime
-pip install -r requirements-ner.txt
-#    Docker:  docker build --build-arg WITH_NER=true .
-
-# 2. Checkpoints (into MEMBER_NER_MODELS_PATH)
-python -m stages.lib.member.extractors.ner_based.model_downloader
-python -m stages.lib.member.extractors.ner_based.model_downloader --check
-
-# 3. Enable
-export MEMBER_NER_ENABLED=true
-curl localhost:8001/health | jq .member_ner     # expect ready: true
-```
-
-The downloader verifies each checkpoint twice: every file present and non-empty,
-then an actual load plus one prediction — a snapshot can complete with all files
-in place and still not load, which otherwise only shows up later as a run that
-detects nothing.
-
-`GET /health` and the member stage's first log line report which of the three
-preconditions is unmet, because they need different fixes:
-
-| `reason` | Fix |
-|---|---|
-| `gliner not installed (…)` | `pip install -r requirements-ner.txt` |
-| `checkpoints missing: …` | run the downloader |
-| `MEMBER_NER_ENABLED=false` | set the flag |
-
-With the layer on, the reference's fail-loud contract is unchanged: a model that
-will not load raises rather than quietly returning no hits.
+`wrong_member_on_page()` decides from the member names the extraction found on the
+page. The extraction is required: without its packages or weights the `kv_extract` stage
+fails the chart (`GET /health` → `extraction.reason` says which), so there is no
+rules-only mode in which nothing can be rejected. Pages the extraction cannot read are the
+exception — see [EXTRACTION.md](EXTRACTION.md#pages-with-no-word-boxes).
 
 ### Writes
 
@@ -448,70 +381,28 @@ outcome:
 | pages checked, none verified | `needs_review` | `accept` |
 
 `confidence` is derived, not a model score: 0.5 for a verified page plus ~1/6
-per field found, rules weighted above NER. The reference carried no numeric
+per field found, rule-read values weighted above GLiNER-read ones. The reference carried no numeric
 confidence — it reported detection source per field, which is what the UI shows.
 
 ---
 
 ## 6. Date of service
 
-**Engine:** `stages/lib/dos/dos_logic.py` · **Stage:** `stages/lib/dos/stage.py` ·
-**Profile:** `keyword-canon/dos_canon.json` (weights, labels, settings —
-reloads on change)
+**Dates:** found by the key/value extraction ([EXTRACTION.md](EXTRACTION.md)) ·
+**Resolve:** `stages/lib/dos/resolve.py` · **Stage:** `stages/lib/dos/stage.py` ·
+**Profile:** `keyword-canon/dos_canon.json` (page types, default date — reloads on change)
 
-Every date on every page becomes a candidate. Each candidate is scored. The
-chart is then resolved page by page. Nothing is vetoed: a DOB label or an old
-year is a large negative weight, so a losing date keeps a score that says why
-it lost.
+The extraction chooses each page's date of service — the labelled date, or an admit +
+discharge pair as one range — with its own score. This stage resolves the chart page by
+page: which encounter a page belongs to, and what a page with no date inherits. The
+candidate scoring, the label weights and the Azure OpenAI fallback of the earlier
+engine are gone.
 
 ```mermaid
 flowchart TD
-  TXT["Combined text, ===== page ===== markers"] --> A["A. find_candidates()<br/>four date shapes, real days only"]
-  A --> B["B. page_features() + chart_features()<br/>label, position, time stamp, page type, age, cluster, range pair"]
-  B --> C["C. score_candidate()<br/>weighted sum, clamped 0–1"]
-  C --> BEST{"best ≥ DOS_MIN_SCORE?"}
-  BEST -- no --> LLM{"clinical cue<br/>and a client?"}
-  LLM -- yes --> AOAI["extract_dos_range_with_llm()"]
-  LLM -- no --> D
-  AOAI --> D
-  BEST -- yes --> D["D. resolve in page order<br/>spans · carry-forward · non-encounter · default"]
+  ST["Staged dates per page<br/>(page_dates: primary + every chosen date)"] --> D["D. resolve in page order<br/>spans · carry-forward · non-encounter · default"]
+  TXT["Page text → page type"] --> D
 ```
-
-### A. Candidates
-
-`MM/DD/YYYY` or `M/D/YY` (either `/` or `-`), `YYYY-MM-DD`, `Month D, YYYY`,
-`D Month YYYY`. Two-digit years below 50 are 20xx, 50 and above 19xx. Dates
-that are not real days (02/30) are dropped; everything else is kept.
-
-### B. Features
-
-| Feature | Meaning |
-|---|---|
-| `label_text` / `label_class` | Nearest label within 80 chars to the left: `encounter`, `admit`, `discharge`, `birth`, `doc_meta`, `future`, `procedure`, or `none`. A label never reaches past an earlier date. |
-| `label_distance` | Characters between the label and the date |
-| `position`, `edge_position` | Offset ÷ page length; in the first or last 60 words |
-| `has_time` | A clock time beside the date (`03/20/2024 10:15 AM`, `…T10:00`) — the shape of a print/fax stamp |
-| `page_type`, `has_clinical_cue` | `codeable_classify.page_type_of()` (per page, no DOS carry); `clinical_cues` |
-| `year_delta` | Candidate year − chart received year (`chart_list.created_at`) |
-| `cluster_size` | Other candidates in the chart within 30 days |
-| `in_range_pair` | An admit and a discharge candidate within 200 chars |
-
-### C. Score
-
-```
-score = base (0.5) + W[label_class] − 0.002 × label_distance
-      + 0.10 if edge_position (not when has_time)
-      − 0.30 if has_time
-      + 0.10 if has_clinical_cue
-      + 0.05 × min(cluster_size, 3)
-      − 0.35 if year_delta < −DOS_MAX_AGE_YEARS
-```
-
-`W`: encounter +0.40, admit/discharge +0.30, none −0.10, procedure −0.30,
-future −0.40, doc_meta −0.45, birth −0.50. Clamped to [0, 1]. The best
-candidate at or above `DOS_MIN_SCORE` (0.55) is the page's date. If it is part
-of an admit/discharge pair, the page gets the range. The chosen score is the
-row's `confidence`.
 
 ### D. Resolve
 
@@ -531,27 +422,17 @@ the profile.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `DOS_MAX_AGE_YEARS` | 6 | Age penalty applies to dates more than this many years before the received date. Replaces the fixed 2020 cutoff. |
-| `DOS_MIN_SCORE` | 0.55 | Lowest score that counts as a page date |
 | `DOS_DEFAULT_DATE` | 2022-02-02 | Delivered when nothing is found. review-ui and `encounter_classify` also know this value. |
+| `span_override_score` | 0.75 | A date scoring at or below this inside a progress-note span is replaced by the span's |
 
-`DOS_DEBUG=true` (env) writes every candidate, its features, its score and
-whether it was chosen to `<chart>/debug/<chart>_dos_candidates.csv`. `debug/`
-is not exported.
+The *score* is the extraction's own for the chosen date.
 
 **Writes**
 
 | Target | Columns |
 |---|---|
-| `dos_extraction_results` | `date_of_service_from/to`, `..._doclevel` (single-valued), `dates` (JSONB array of `{seq, date_of_service_from, date_of_service_to, source_keyword, confidence}`), `extraction_method` (`rules`\|`llm`\|`rules+llm`), `confidence`. `date_count` is generated from `dates`. |
+| `dos_extraction_results` | `date_of_service_from/to`, `..._doclevel` (single-valued), `dates` (JSONB array of `{seq, date_of_service_from, date_of_service_to, source_keyword, confidence}`), `extraction_method` (always `rules` now; the column still allows `llm` / `rules+llm`), `confidence`. `date_count` is generated from `dates`. |
 | disk | `imaging/<chart>_dos.csv` |
-
-Without Azure OpenAI the stage runs rules-only and stamps
-`extraction_method='rules'` — visible in the data, not silent. "Without" means
-no endpoint, or no usable credential: either an API key or, on a VM with a
-managed identity, an Entra token and no key. Which one was used is in the run
-log (`auth=key` / `auth=entra`); the setting is
-[`AZURE_OPENAI_AUTH`](API.md#azure-openai-key-or-no-key).
 
 ---
 
@@ -820,9 +701,10 @@ v8 uses lifecycle `status` + `current_stage` + `current_pass`, with order in the
 |---|---|
 | Stage order, skip rules | `core-pipeline/orchestrator/runner.py`, `stages/_support.py` |
 | Blank/junk detectors | `core-pipeline/stages/lib/blank_junk/` |
-| Member rules + NER | `core-pipeline/stages/lib/member/` |
+| Member verification rules | `core-pipeline/stages/lib/member/` |
+| Key/value extraction (member, DOS, page no, headings) | `core-pipeline/stages/lib/extraction/` |
 | Member driver (ported `run.py`) | `core-pipeline/stages/lib/member/engine.py` |
-| DOS regex + LLM + carry-forward | `core-pipeline/stages/lib/dos/dos_logic.py` |
+| DOS resolution (spans, carry-forward, default) | `core-pipeline/stages/lib/dos/resolve.py` |
 | Status derivation | `core-pipeline/db/chart_status.py` |
 | Persistence | `core-pipeline/db/__init__.py` |
 

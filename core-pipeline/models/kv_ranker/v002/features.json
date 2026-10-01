@@ -1,0 +1,448 @@
+{
+  "numeric": [
+    "rule_score",
+    "rule_accepted",
+    "rule_selected",
+    "key_edit_distance",
+    "key_weak",
+    "key_cluster_size",
+    "key_n_words",
+    "key_x0",
+    "key_y0",
+    "key_x1",
+    "key_y1",
+    "value_found",
+    "value_x0",
+    "value_y0",
+    "value_x1",
+    "value_y1",
+    "word_gap",
+    "line_gap",
+    "dx",
+    "value_len",
+    "value_n_words",
+    "digit_ratio",
+    "alpha_ratio",
+    "upper_ratio",
+    "has_comma",
+    "has_initial",
+    "value_is_date",
+    "page_count",
+    "page_frac",
+    "n_keys_page",
+    "n_trusted_keys_page",
+    "n_field_keys",
+    "n_field_candidates",
+    "n_field_accepted",
+    "page_value_count",
+    "page_distinct_values",
+    "record_value_pages",
+    "record_value_share",
+    "record_distinct_values",
+    "heading_height_ratio",
+    "heading_key_overlap",
+    "heading_value_overlap",
+    "heading_whole_line",
+    "heading_line_count",
+    "heading_ends_colon",
+    "heading_tail_words",
+    "score_rank",
+    "score_gap",
+    "same_value_in_group"
+  ],
+  "categorical": [
+    "key",
+    "key_match",
+    "key_trusted_reason",
+    "region",
+    "relation",
+    "rule_source",
+    "detail_cat",
+    "heading_key_field",
+    "heading_position",
+    "id_type"
+  ],
+  "categories": {
+    "dob": {
+      "key": [
+        "Birth Date",
+        "D.O.B.",
+        "DOB",
+        "DOB/AGE/SEX",
+        "No Key Footer",
+        "No Key Header",
+        "Patient DOB",
+        "Repeated Value"
+      ],
+      "key_match": [
+        "exact",
+        "fuzzy",
+        "keyless",
+        "regex"
+      ],
+      "key_trusted_reason": [
+        "cluster",
+        "edge"
+      ],
+      "region": [
+        "footer",
+        "header",
+        "keyless_footer",
+        "keyless_header",
+        "mid_cluster"
+      ],
+      "relation": [
+        "below",
+        "keyless",
+        "overlap",
+        "right",
+        "unknown"
+      ],
+      "rule_source": [
+        "keyless_edge",
+        "ner",
+        "repeat"
+      ],
+      "detail_cat": [],
+      "heading_key_field": [],
+      "heading_position": [],
+      "id_type": []
+    },
+    "member_id": {
+      "key": [
+        "ACCOUNT",
+        "ACCOUNT NO.",
+        "Acc No.",
+        "Acct #",
+        "Chart #",
+        "FIN",
+        "ID",
+        "Insured ID",
+        "MAN",
+        "MARK",
+        "MRN",
+        "PMS ID",
+        "PMS IDX",
+        "PRN",
+        "Patient ID",
+        "SSN"
+      ],
+      "key_match": [
+        "exact",
+        "fuzzy",
+        "lookalike"
+      ],
+      "key_trusted_reason": [
+        "cluster",
+        "edge"
+      ],
+      "region": [
+        "footer",
+        "header",
+        "mid",
+        "mid_cluster"
+      ],
+      "relation": [
+        "below",
+        "overlap",
+        "right",
+        "unknown"
+      ],
+      "rule_source": [
+        "column",
+        "geometry",
+        "ner"
+      ],
+      "detail_cat": [],
+      "heading_key_field": [],
+      "heading_position": [],
+      "id_type": [
+        "encounter",
+        "member_id",
+        "mrn",
+        "ssn"
+      ]
+    },
+    "name": {
+      "key": [
+        "For",
+        "Name",
+        "Patient",
+        "Patient Name",
+        "Repeated Value",
+        "near:Acc No.",
+        "near:Acct #",
+        "near:D.O.B.",
+        "near:DOB",
+        "near:MRN",
+        "near:PMS IDX",
+        "near:Page"
+      ],
+      "key_match": [
+        "exact",
+        "fuzzy",
+        "keyless",
+        "regex"
+      ],
+      "key_trusted_reason": [
+        "cluster",
+        "edge",
+        "patient_near_key"
+      ],
+      "region": [
+        "footer",
+        "header",
+        "keyless_footer",
+        "keyless_header",
+        "mid_cluster"
+      ],
+      "relation": [
+        "above",
+        "below",
+        "keyless",
+        "left",
+        "overlap",
+        "right",
+        "unknown"
+      ],
+      "rule_source": [
+        "after_key",
+        "below_key",
+        "keyless",
+        "keyless_adjacent",
+        "keyless_ner",
+        "keyless_running_header",
+        "ner",
+        "repeat"
+      ],
+      "detail_cat": [],
+      "heading_key_field": [],
+      "heading_position": [],
+      "id_type": []
+    },
+    "provider_name": {
+      "key": [
+        "Att Phys",
+        "Attending",
+        "Attending Provider",
+        "Author",
+        "Bill Under",
+        "PCP",
+        "Pathologist",
+        "Physician",
+        "Primary Provider",
+        "Progress Note",
+        "Progress Notes",
+        "Provider",
+        "Scribe",
+        "crna",
+        "surgeon"
+      ],
+      "key_match": [
+        "exact",
+        "fuzzy"
+      ],
+      "key_trusted_reason": [
+        "cluster",
+        "provider_label",
+        "role_key"
+      ],
+      "region": [
+        "mid",
+        "mid_cluster"
+      ],
+      "relation": [
+        "above",
+        "below",
+        "left",
+        "overlap",
+        "right",
+        "unknown"
+      ],
+      "rule_source": [
+        "geometry",
+        "ner",
+        "rejected_non_person",
+        "role_id_gate"
+      ],
+      "detail_cat": [
+        "edge_only",
+        "role",
+        "standard"
+      ],
+      "heading_key_field": [],
+      "heading_position": [],
+      "id_type": []
+    },
+    "electronic_signature": {
+      "key": [
+        "Digitally Signed by",
+        "Electronically signed by",
+        "Sign Information",
+        "Signed",
+        "Signed electronically by"
+      ],
+      "key_match": [
+        "exact"
+      ],
+      "key_trusted_reason": [
+        "esig_phrase"
+      ],
+      "region": [
+        "header",
+        "mid_cluster"
+      ],
+      "relation": [
+        "overlap",
+        "right",
+        "unknown"
+      ],
+      "rule_source": [
+        "ner",
+        "printed_after",
+        "printed_window"
+      ],
+      "detail_cat": [],
+      "heading_key_field": [],
+      "heading_position": [],
+      "id_type": []
+    },
+    "dos": {
+      "key": [
+        "Admission Date/Time",
+        "Admit",
+        "Admit Date",
+        "Admit Inpatient Date/Time",
+        "Chief Complaint",
+        "Collection Date",
+        "DOS",
+        "Date",
+        "Date of Service",
+        "Disch",
+        "Discharge Date",
+        "Discharge Date/Time",
+        "Encounter",
+        "Encounter Date",
+        "Exam Date",
+        "No Key Footer",
+        "No Key Header",
+        "Office Visit on",
+        "Order Date",
+        "Progress Note",
+        "Received",
+        "Reg Dt/Tm",
+        "Report Date",
+        "Service",
+        "Service Date/Time",
+        "Visit Note",
+        "dd"
+      ],
+      "key_match": [
+        "exact",
+        "fuzzy",
+        "keyless"
+      ],
+      "key_trusted_reason": [
+        "cluster",
+        "dos_strong_key",
+        "edge",
+        "provider_label"
+      ],
+      "region": [
+        "footer",
+        "header",
+        "keyless_footer",
+        "keyless_header",
+        "mid_cluster"
+      ],
+      "relation": [
+        "below",
+        "keyless",
+        "overlap",
+        "right",
+        "unknown"
+      ],
+      "rule_source": [
+        "below",
+        "below_shared",
+        "column",
+        "keyless_edge",
+        "next_line",
+        "same_line",
+        "same_line_introduced",
+        "same_line_shared"
+      ],
+      "detail_cat": [
+        "admit",
+        "discharge",
+        "keyless",
+        "service",
+        "weak"
+      ],
+      "heading_key_field": [],
+      "heading_position": [],
+      "id_type": []
+    },
+    "page_no": {
+      "key": [
+        "No Key Footer",
+        "No Key Header"
+      ],
+      "key_match": [
+        "keyless"
+      ],
+      "key_trusted_reason": [],
+      "region": [
+        "keyless_footer",
+        "keyless_header"
+      ],
+      "relation": [
+        "keyless"
+      ],
+      "rule_source": [
+        "bare_slash",
+        "label"
+      ],
+      "detail_cat": [],
+      "heading_key_field": [],
+      "heading_position": [],
+      "id_type": []
+    },
+    "heading_heron": {
+      "key": [],
+      "key_match": [
+        "keyless"
+      ],
+      "key_trusted_reason": [],
+      "region": [
+        "label",
+        "page_header",
+        "section"
+      ],
+      "relation": [],
+      "rule_source": [
+        "page_header",
+        "section_header",
+        "text_label"
+      ],
+      "detail_cat": [
+        "Heading",
+        "Subheading"
+      ],
+      "heading_key_field": [
+        "dob",
+        "dos",
+        "electronic_signature",
+        "member_id",
+        "name",
+        "provider_name"
+      ],
+      "heading_position": [
+        "after_stop",
+        "inline",
+        "line_start"
+      ],
+      "id_type": []
+    }
+  }
+}

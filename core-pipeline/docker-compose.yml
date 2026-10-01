@@ -16,10 +16,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # true installs the GLiNER runtime (~2.5 GB). Needed for wrong-member
-        # detection; checkpoints live under MODELS_HOST_PATH/.../ner/.
-        WITH_NER: ${WITH_NER:-false}
     image: advantmed/core-pipeline:latest
     ports:
       - "${API_PORT:-8001}:8001"
@@ -65,26 +61,15 @@ services:
       AZURE_DI_FEATURES: ${AZURE_DI_FEATURES:-languages,barcodes}
       AZURE_DI_CONNECTION_POOL_SIZE: ${AZURE_DI_CONNECTION_POOL_SIZE:-32}
 
-      # --- Azure OpenAI: the DOS stage's LLM pass ---
-      # Unset => DOS runs rules-only and stamps extraction_method='rules'.
-      DOS_LLM_ENABLED: ${DOS_LLM_ENABLED:-true}
-      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
-      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
-      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-08-01-preview}
-      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-gpt-4o-mini}
-      AZURE_OPENAI_AUTH: ${AZURE_OPENAI_AUTH:-auto}
-
       # Page sequencing (optional ONNX cross-encoder; default = markers/headers).
       SEQUENCING_CROSS_ENCODER: ${SEQUENCING_CROSS_ENCODER:-false}
 
-      # --- Member verification NER layer ---
-      # OFF unless the GLiNER checkpoints are under models/ner. While off, no
-      # page can be marked wrong_member, so no document can be Rejected.
-      # NER toggles and every model path come from env_file (.env). Do NOT
-      # re-declare MEMBER_NER_* or BLANK_JUNK_MODEL_DIR / HW_MODEL_PATH here
-      # with ${VAR:-…} — Compose interpolates from the host shell first, so a
-      # leftover export would override the file. Paths in .env are relative
-      # to core-pipeline/ and land on the models mount below.
+      # --- Key/value extraction ---
+      # Weights (gliner_low, layout_heron, kv_ranker/v002) come from the models mount
+      # below; a missing one fails the extraction stage, naming the folder.
+      # Env paths and BLANK_JUNK_MODEL_DIR / HW_MODEL_PATH come from env_file (.env).
+      # Do NOT re-declare them here with ${VAR:-…} — Compose interpolates from the host
+      # shell first, so a leftover export would override the file.
       SKIP_OCR: ${SKIP_OCR:-false}
 
       TESSERACT_CMD: /usr/bin/tesseract
@@ -98,7 +83,8 @@ services:
       # Chart workspace — written here, read by review-ui.
       - ${DATA_HOST_PATH:-../review-ui/data/folders}:/data/folders
       - ${METADATA_HOST_PATH:-../review-ui/data/metadata}:/data/metadata
-      # core-pipeline/models/ (hw/, rapidocr/, semantic-model/, blank-junk/, ner/).
+      # core-pipeline/models/ (hw/, rapidocr/, semantic-model/, blank-junk/, gliner_low/,
+      # layout_heron/, kv_ranker/).
       # .env paths such as models/blank-junk resolve here. Writable: GLiNER
       # repairs encoder config.json on first load.
       - ${MODELS_HOST_PATH:-./models}:/app/core-pipeline/models

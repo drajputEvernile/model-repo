@@ -1,0 +1,321 @@
+Prenatal Records
+ACOG Form
+Prenatal Visit Flow chart
+Prenatal Flow
+Prenatal Form
+Antepartum Record
+Postpartum
+PP Visit
+PP Exam
+Activity Evaluation
+EYE exam
+EYE report
+EYE record
+Ophthalmology Report
+Ophthalmology Records
+Ocular Note
+Optometry note
+retinopathy
+Visual field activity
+Anesthesia Record
+Annual Health Assessment
+Annual Wellnes Visit
+Assessment
+Assessment notes
+Assessment Forms
+Assessment Report
+Cardiac Catheterization
+Cardiology
+Cardiovascular report
+Chief Complaint
+History of Present Illness
+Physical exam
+HPI
+CC
+Colonoscopy
+Sigmoidoscopy
+Colposcopic Examination
+Consultations
+Molecular Report
+Skin Test
+Cytology Report
+Dermatology
+Transthorsic Echocadiography
+Echocardiogram
+Neurophysiology Report
+EEG Report
+ECG graph
+EKG
+Emegency visit records
+EMG Report
+Encounter Form
+Encounter visit
+Endoscopy
+ED Note
+Emergency Department Note
+ER reports
+Established patient note
+Evaluation form
+Functional assessment
+EGD Report
+GI Procedure Note
+Upper Extremity
+Lower Extremity Doppler
+Duplex report
+Status visit
+Gastroenterology
+History & Physical
+Lower Extremity
+Medical Status Visit form
+Myocardial perfusion
+Nephrology
+EMG Note
+Neurology
+Nurses notes
+Nutrition Assessment
+Occupational Therapy
+followup Visits
+Office visits
+Oncology
+Operative Report
+Oximetry note
+Oximetry report
+Device monitor report
+Pap Smear
+Tissue Report
+Pacemaker
+PAP Report
+Pathology Report
+Physical Therapy Assessement
+Physical Therapy note
+Physician Notes
+Plan of Care
+Procedure Note
+Progress notes
+Rehabitation Daily Treatment Note
+PSG Report
+Polysomnography Report
+Subjective
+Objective
+Plan
+Sleep Study
+Staying Healthy Assessment
+treadmill exercise report
+Stress Test
+surgery report
+Treatment Plan Record
+Triage Report
+Exercise report
+Triage surgery report
+Urgent Care Note
+Urology
+Nuclear Medicine Report
+Cytometry Report
+Telephone Encounter
+Telephone note
+Telephone visit
+Phone note
+Patient Information
+Patient Demographic
+Registration
+Face sheet
+Audiology
+Audiology Notes
+Hearing Report
+Office Visit
+Office Notes
+Patient Summary
+Progress note
+Visit summary
+Initial office note
+Occupational Therapy Daily Note
+Retinal Office Procedure Note
+Initial Psychiatric Evaluation
+inform Evaluation Visual
+Fundas Photography
+Case History Update
+Biopsy report
+Patient Encounter
+Laryngoscopy Procedure Report
+Tissue Examination Report
+Molecular Diagnostics Test
+Therapy report
+Radiation Therapy Record
+Chemotherapy Administration Record
+Infusion Therapy Note
+Pain Management Note
+Palliative Care Note
+Hospice Care Record
+Critical Care Note
+ICU Flow Sheet
+Ventilator Management Record
+Respiratory Therapy Note
+Dialysis Treatment Record
+Hemodialysis Flow Sheet
+Peritoneal Dialysis Record
+Wound Care Note
+Burn Treatment Record
+Infection Control Note
+Genetic Counseling Note
+Sleep Clinic Note
+Behavioral Health Note
+Psychotherapy Session Note
+Substance Abuse Treatment Record
+Rehabilitation Plan
+Speech Therapy Note
+Chiropractic Treatment Note
+Acupuncture Treatment Record
+Home Health Visit Note
+Skilled Nursing Visit Note
+Case Management Note
+Care Coordination Note
+Utilization Review Note
+Preoperative Evaluation
+Postoperative Follow-up Note
+Anesthesia Pre-op Assessment
+Anesthesia Post-op Note
+Implant Record
+Device Implant Log
+Emergency Medical Services Report
+Occupational Health Record
+Work Injury Evaluation
+Fitness for Duty Evaluation
+School Physical Form
+Sports Physical Examination
+Travel Medicine Consultation
+Chronic Disease Management Note
+Hypertension Follow-up Note
+Cardiac Rehabilitation Note
+Madicare Annual Wellness
+patient care Report
+Clinical Summary
+Consulta
+PAP/HPV Report
+Treadmill Report
+Face to Face Evaluation Note
+Lens Parameters
+Neurocognitive Screening Examination
+Split Night Report
+Group Note
+SPECT Report
+Event Report
+Housecalls Visit Summary
+Videonystagmography
+Device Specialist notes
+Titration Report
+Sural Nerve Conduction Study
+Visual Field interpretation
+MOHS Report
+Client note
+Sudoscan Report
+DPN Results
+EMS Report
+Depart Note
+Depart Summary
+Discharge instructions
+Discharge Medication
+Discharge Summary
+Transfer Summary
+Transition of care Summary
+Resumen de Alta
+Interim Summaries
+Discharge Note
+Transfer of Care Note
+Plannifaction de Alta
+Hospital Course
+Short Stay Summary
+Occupational Therapy Discharge summary
+Physical Therapy Discharge Summary
+Interim Note
+BH-OP Discharge
+Principal Dignosis
+Anesthesia Transfer of Care note
+Final Case Summary
+Resumen de Instruccion
+Discharge Diagnosis
+DEXA Report
+Application Form
+Blood Glucose
+Bone Mineral Density Report
+Messages
+Chemistry Report
+Chest View
+Lab Form
+Lab
+Laboratory Data
+Lab Requisation
+Lab work
+Mammo
+MG
+Mammograms
+Medication List
+Microbiology
+Mini Mental examination
+Patient Education
+Plethysmography Report
+Prothrombin time
+Spirometry
+Pulmonary function Test
+Referral Authorization Form
+Refill Record
+social report
+Sonograms Report
+Telephone Messages
+Tomography
+Triage call
+Ultrasounds Report
+Urinalysis
+All types of order
+Order note
+Physician Order
+Patient Instruction
+Any Type of Request
+MR Brain Report
+MRI
+CT Scans Report
+Prescriptions
+Foot Exam
+RX
+Radiology Report
+X-Ray Report
+Allergies report
+Carotid Duplex Report
+Health Maintenance Report
+Esophageal Manometry
+Health Review sheet
+Holter report
+IADL flow sheet
+flu Shot
+Vaccine
+ADL flow sheet
+Ankle-Brachial Index
+Check List
+Immunization List
+Questionnaire
+After Visit Summary
+Any Type of Notification
+Any Type of Notice
+Problem List
+Out Of Time Frame Records
+Client FTP
+Client Retrieval
+Imaging Client Upload
+Appointment Note
+Appointment Summary
+Clinical Diagnoses
+Protocols
+Vaccination Administration Record
+Immunization Consent
+Allergy Testing Report
+Genetic Test Report
+Insurance Authorization Note
+Surgical Consent Form
+Blood Transfusion Record
+Transfusion Consent
+Screening Test Record
+Preventive Health Checklist
+Glucose Report
+HIPAA Form
+Patient Portal Communication Summary
+Discharge Notice
+Hematology

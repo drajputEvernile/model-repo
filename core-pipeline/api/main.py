@@ -23,7 +23,7 @@ try:
     from dotenv import load_dotenv
 
     # .env is the source of truth for local uvicorn. Without override=True a
-    # leftover shell export (e.g. MEMBER_NER_MODEL_ID=gliner_low from the docs)
+    # leftover shell export (e.g. EXTRACTION_MODELS_ROOT from an earlier trial)
     # silently wins over the value in the file.
     load_dotenv(ROOT / ".env", override=True)
 except ImportError:
@@ -35,8 +35,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from config import (
     API_HOST,
     API_PORT,
-    DOS_LLM_ENABLED,
-    MEMBER_NER_ENABLED,
     STAGE_WORKERS,
 )
 from db import close_pool, connect, get_chart, get_chart_by_name, list_pages, list_stages
@@ -702,16 +700,14 @@ def health() -> dict[str, Any]:
 
         caps = all_capabilities()
     except Exception as exc:  # never let a probe fail on an optional feature
-        caps = {"member_ner": {"enabled": MEMBER_NER_ENABLED, "ready": False,
-                               "reason": str(exc)}}
+        caps = {"extraction": {"ready": False, "reason": str(exc)}}
 
     return {
         "status": "ok",
-        # member_ner.ready=false means member verification runs rules-only: no
-        # page can be marked wrong_member, so no document can be Rejected.
+        # extraction.ready=false means the key/value stage will fail the chart:
+        # its packages or weights are missing (extraction.reason names which).
         # blob.ready=false means run/batch-run work locally but not from blob.
         **caps,
-        "dos_llm_enabled": DOS_LLM_ENABLED,
         "stage_workers": STAGE_WORKERS,
     }
 

@@ -1,100 +1,7 @@
 {
-  "note": "Date-of-service scorer. Every date on a page is a candidate; each gets score = base + label weight - distance decay + edge/cue/cluster bonuses - age penalty, clamped to [0,1]. The best candidate at or above DOS_MIN_SCORE is the page's date. Edit weights and label phrases here, not in dos_logic.py. Reloads on change.",
-  "DOS_MAX_AGE_YEARS": 6,
-  "DOS_MIN_SCORE": 0.55,
+  "note": "Date-of-service resolution. The dates themselves are found by the key/value extraction (stages/lib/extraction); this file decides which encounter a page belongs to. A progress note opens a span; a later page whose date scores at or below span_override_score (or has none) takes the note's date. Demographics and injection pages keep DOS_DEFAULT_DATE. Reloads on change.",
   "DOS_DEFAULT_DATE": "2022-02-02",
-  "base": 0.5,
-  "label_weights": {
-    "encounter": 0.4,
-    "admit": 0.3,
-    "discharge": 0.3,
-    "none": -0.1,
-    "procedure": -0.3,
-    "future": -0.4,
-    "doc_meta": -0.45,
-    "birth": -0.5
-  },
-  "label_distance_decay": 0.002,
-  "edge_bonus": 0.1,
-  "clinical_cue_bonus": 0.1,
-  "cluster_bonus": 0.05,
-  "cluster_cap": 3,
-  "age_penalty": 0.35,
-  "timestamp_penalty": 0.3,
-  "note_timestamp": "A date with a clock time beside it (03/20/2024 10:15 AM, 2025-12-31T10:00) is usually a print, fax or signature stamp in the header or footer: it loses timestamp_penalty and gets no edge_bonus. A labelled encounter time (Arrival Date: 03/14/2024 14:32) still clears DOS_MIN_SCORE.",
   "span_override_score": 0.75,
-  "llm_confidence": 0.7,
-  "window_left_chars": 80,
-  "window_right_chars": 40,
-  "edge_words": 60,
-  "cluster_days": 30,
-  "range_pair_chars": 200,
-  "labels": {
-    "encounter": [
-      "encounter date",
-      "date of service",
-      "date of visit",
-      "service date",
-      "ed visit date",
-      "presentation date",
-      "arrival date",
-      "office visit",
-      "visit date",
-      "dos"
-    ],
-    "admit": [
-      "admit date",
-      "admission date",
-      "date of admission",
-      "date of admit",
-      "admitted on",
-      "admitted",
-      "admit",
-      "dos from"
-    ],
-    "discharge": [
-      "discharge date",
-      "date of discharge",
-      "discharged on",
-      "discharged",
-      "discharge",
-      "dos to"
-    ],
-    "birth": [
-      "dob",
-      "d.o.b.",
-      "date of birth",
-      "birth date",
-      "born"
-    ],
-    "doc_meta": [
-      "document created",
-      "rendered date",
-      "rendered at",
-      "signed at",
-      "printed on",
-      "generated on",
-      "printed",
-      "print date",
-      "date printed",
-      "run date",
-      "faxed on",
-      "fax date"
-    ],
-    "future": [
-      "due again",
-      "return visit",
-      "next visit",
-      "scheduled for"
-    ],
-    "procedure": [
-      "administered on",
-      "performed on",
-      "given on",
-      "endoscopy",
-      "colonoscopy"
-    ]
-  },
   "non_encounter_page_types": [
     "Face sheet / Registration",
     "Demographics",
@@ -117,27 +24,5 @@
   "span_page_types": [
     "Progress Note"
   ],
-  "clinical_cues": [
-    "chief\\s+complaint",
-    "history\\s+of\\s+present\\s+illness|\\bhpi\\b",
-    "discharge\\s+(summary|note|diagnos|instruction)",
-    "reason\\s+for\\s+(consult|visit|admission)",
-    "principal\\s+diagnosis",
-    "admission\\s+(date|note|diagnos)",
-    "hospital\\s+course",
-    "progress\\s+note",
-    "operative\\s+(note|report)",
-    "consult(?:ation)?\\s+note",
-    "emergency\\s+(department|room)\\s+note",
-    "\\bed\\s+note\\b"
-  ],
-  "discharge_cues": [
-    "discharge\\s+(summary|note|diagnos|date|instruction)",
-    "admission\\s+date",
-    "hospital\\s+course",
-    "date\\s+of\\s+admission",
-    "date\\s+of\\s+discharge"
-  ],
-  "note_cues": "Regex patterns. clinical_cues gives the has_clinical_cue bonus and gates the Azure OpenAI fallback; discharge_cues makes the fallback ask for admission and discharge dates.",
   "note_page_types": "non_encounter_page_types and span_page_types are page_type names from codeable_canon.json, matched exactly (case-insensitive)."
 }

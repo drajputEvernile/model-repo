@@ -27,12 +27,12 @@ from stages._support import stage_label
 from stages.lib.blank_junk import stage as blank_junk_classify
 from stages.lib.dos import stage as dos_extract
 from stages.lib.encounter import stage as encounter_type
+from stages.lib.extraction import stage as kv_extract
 from stages.lib.image_preprocess import stage as quality_rotation_hw
 from stages.lib.member import stage as member_extract_verify
 from stages.lib.ocr import stage_final1 as ocr_final1_docling
 from stages.lib.ocr import stage_final2 as ocr_final2_azure
 from stages.lib.ocr import stage_prelim as ocr_prelim_tesseract
-from stages.lib.ocr import stage_section_headers as section_headers
 from stages.lib.page_classify import stage as page_subtype
 from stages.lib.sequencing import stage as page_sequencing
 from stages.utilities.download_blob import run_download
@@ -53,7 +53,7 @@ STAGE_CHAIN: list[tuple[str, int, StageFn]] = [
     ("blank_junk", 1, blank_junk_classify.run_pass1),
     ("ocr_final1", 1, ocr_final1_docling.run),
     ("ocr_final2", 1, ocr_final2_azure.run),
-    ("section_headers", 1, section_headers.run),
+    ("kv_extract", 1, kv_extract.run),
     ("blank_junk", 2, blank_junk_classify.run_pass2),
     ("member_verify", 1, member_extract_verify.run),
     ("dos_extract", 1, dos_extract.run),
@@ -434,6 +434,13 @@ def run_pipeline_for_chart(
 
         results["progress"] = progress
         results["status"] = progress.get("status")
+        # The extraction's staging has done its job once the whole chain has run: every
+        # stage that reads it has. A partial run (`only` / `through`) leaves it for the next.
+        if full_run and progress.get("status") in {"completed", "needs_review"}:
+            from stages.lib.extraction import staging
+
+            if staging.drop(chart["chart_name"]):
+                logger.info("Chart %s: extraction staging dropped", chart["chart_name"])
         return results
 
     except Exception as exc:

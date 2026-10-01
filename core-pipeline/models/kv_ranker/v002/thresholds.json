@@ -1,0 +1,10 @@
+{
+  "dob": 0.5,
+  "member_id": 0.5,
+  "name": 0.5,
+  "provider_name": 0.2,
+  "electronic_signature": 0.5,
+  "dos": 0.85,
+  "page_no": 0.5,
+  "heading_heron": 0.3
+}

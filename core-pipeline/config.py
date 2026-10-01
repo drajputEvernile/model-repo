@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-from importlib.util import find_spec
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -94,24 +93,6 @@ AZURE_RETRY_MAX_DELAY = float(os.environ.get("AZURE_RETRY_MAX_DELAY") or "30.0")
 # rate-limited per resource, not per chart.
 AZURE_DI_MAX_CONCURRENT = int(os.environ.get("AZURE_DI_MAX_CONCURRENT") or "4")
 
-# --- Azure OpenAI (DOS range extraction — the reference's LLM pass) ---------
-# dos_logic.extract_dos_range_with_llm needs these. Without them the DOS stage
-# runs rules-only and stamps extraction_method='rules' so the difference is
-# visible in the data rather than silent.
-AZURE_OPENAI_API_KEY = (os.environ.get("AZURE_OPENAI_API_KEY") or "").strip()
-AZURE_OPENAI_ENDPOINT = (os.environ.get("AZURE_OPENAI_ENDPOINT") or "").strip()
-AZURE_OPENAI_API_VERSION = (
-    os.environ.get("AZURE_OPENAI_API_VERSION") or "2024-08-01-preview"
-).strip()
-AZURE_OPENAI_DEPLOYMENT = (
-    os.environ.get("AZURE_OPENAI_DEPLOYMENT") or "gpt-4o-mini"
-).strip()
-# key | entra | auto. `auto` means "key if there is one, else Entra ID" — so a
-# VM with a managed identity and no key still gets the LLM pass, and a laptop
-# with a key is unaffected. See stages/lib/dos/azure_llm.py.
-AZURE_OPENAI_AUTH = (os.environ.get("AZURE_OPENAI_AUTH") or "auto").strip().casefold()
-
-
 # --- Rotation correction ----------------------------------------------------
 # Stage 1 measures orientation, tilt and mirror, and writes a corrected image
 # to corrected-pages/ which every later stage reads in place of the original.
@@ -164,30 +145,6 @@ SKIP_OCR = _flag("SKIP_OCR", False)
 LARGE_CHART_MIN_PAGES = int(os.environ.get("LARGE_CHART_MIN_PAGES") or "500")
 
 
-def _azure_openai_auth_usable() -> bool:
-    """Can we authenticate at all — by key, or by Entra ID with no key?
-
-    `find_spec` only asks whether azure-identity is installed; whether the VM's
-    managed identity actually holds the role is answered by the first call, and
-    a failure there degrades the stage to regex with a warning.
-    """
-    if AZURE_OPENAI_AUTH == "key":
-        return bool(AZURE_OPENAI_API_KEY)
-    if AZURE_OPENAI_AUTH == "entra":
-        return find_spec("azure.identity") is not None
-    return bool(AZURE_OPENAI_API_KEY) or find_spec("azure.identity") is not None
-
-
-DOS_LLM_ENABLED = (
-    _flag("DOS_LLM_ENABLED", True)
-    and bool(AZURE_OPENAI_ENDPOINT)
-    and _azure_openai_auth_usable()
-)
-
-# Writes every DOS candidate with its features and score to
-# <chart>/debug/<chart>_dos_candidates.csv. debug/ is never exported.
-DOS_DEBUG = _flag("DOS_DEBUG", False)
-
 # Writes the evidence behind every page type (per-family scores, keyword hits
 # with role and band) to <chart>/debug/<chart>_page_classify_evidence.csv.
 PAGE_CLASSIFY_DEBUG = _flag("PAGE_CLASSIFY_DEBUG", False)
@@ -201,16 +158,22 @@ ENCOUNTER_DEBUG = _flag("ENCOUNTER_DEBUG", False)
 # under stages/lib/sequencing/artifacts/ and set true to enable.
 SEQUENCING_CROSS_ENCODER = _flag("SEQUENCING_CROSS_ENCODER", False)
 
-# --- Member verification ----------------------------------------------------
-# The NER layer needs the GLiNER checkpoints, which are not in the repo. With it
-# off the pipeline runs the reference's rule pass only — and no page can be
-# classified wrong_member, so no document can be Rejected. See
-# stages/lib/member/engine.py.
-MEMBER_NER_ENABLED = _flag("MEMBER_NER_ENABLED", False)
-MEMBER_NER_MODEL_ID = (
-    os.environ.get("MEMBER_NER_MODEL_ID") or "gliner_medium"
-).strip()
-MEMBER_NER_MODELS_PATH = os.environ.get("MEMBER_NER_MODELS_PATH") or ""
+# --- Key/value extraction ---------------------------------------------------
+# One stage (stages/lib/extraction) runs right after OCR and stages every field
+# the later stages read: member name / DOB / ID, DOS, provider, e-signature,
+# printed page number and headings. Member verification, DOS and sequencing use
+# that staged data; the staging is dropped once the chart is done.
+#
+# Weights sit side by side under one folder, the same layout the extraction
+# module was built against:
+#   gliner_low/            GLiNER small (NER over key/value sentences)
+#   layout_heron/          docling-layout-heron (heading detector)
+#   kv_ranker/vNNN/        trained ranker; the rules find candidates, it picks
+# A missing folder is an error naming the folder — never a silent rules-only run.
+# The one trained version the pipeline runs. Deliberately not an environment setting: a different
+# version (or v0, the rules alone) changes what every later stage reads. Trained versions are
+# evaluated with training/evaluate.py; adopting one is a change to this line.
+EXTRACTION_MODEL_VERSION = "v002"
 
 # Stage concurrency: pages processed in parallel within one stage. OCR stages
 # are IO/CPU bound per page and independent, so this is the main throughput
@@ -283,6 +246,18 @@ BLANK_JUNK_MODEL_DIR = _path_under_core(
     os.environ.get("BLANK_JUNK_MODEL_DIR"),
     "models/blank-junk",
 )
+# Extraction weights (see "Key/value extraction" above).
+EXTRACTION_MODELS_ROOT = _path_under_core(
+    os.environ.get("EXTRACTION_MODELS_ROOT"),
+    "models",
+)
+# Where the training tools read their reviewed runs / OCR / images and write
+# datasets. The pipeline itself never writes here — training data is not
+# collected through it.
+EXTRACTION_DATA_ROOT = _path_under_core(
+    os.environ.get("EXTRACTION_DATA_ROOT"),
+    "data/extraction",
+)
 
 IMAGE_SUFFIXES = {
     ".bmp", ".dib", ".gif", ".j2k", ".jfif", ".jp2", ".jpe", ".jpeg", ".jpg",
@@ -310,6 +285,15 @@ def ocr_dir(chart_name: str) -> Path:
 
 def imaging_dir(chart_name: str) -> Path:
     return chart_dir(chart_name) / "imaging"
+
+
+def staging_dir(chart_name: str) -> Path:
+    """Extraction staging for one chart: the fields stage 6 found, until the chart is done.
+
+    Not part of the chart's results — nothing here is exported or read by the
+    review UI, and the orchestrator deletes it when the chart completes.
+    """
+    return chart_dir(chart_name) / "staging"
 
 
 def corrected_pages_dir(chart_name: str) -> Path:
@@ -376,10 +360,3 @@ def ensure_chart_dirs(chart_name: str) -> Path:
     for sub in ("pages", "ocr", "imaging", "corrected-pages"):
         (root / sub).mkdir(parents=True, exist_ok=True)
     return root
-
-
-# The member NER package reads these from the environment at import time.
-os.environ.setdefault("MEMBER_NER_ENABLED", "true" if MEMBER_NER_ENABLED else "false")
-os.environ.setdefault("MEMBER_NER_MODEL_ID", MEMBER_NER_MODEL_ID)
-if MEMBER_NER_MODELS_PATH:
-    os.environ.setdefault("MEMBER_NER_MODELS_PATH", MEMBER_NER_MODELS_PATH)

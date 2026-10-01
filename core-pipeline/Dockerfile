@@ -23,19 +23,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Docling + MiniLM packages are required for Final1 in-container — always
-# install. Weight files are NOT baked in; mount ./models (scp onto the host).
-#
-# The NER layer (GLiNER) is still opt-in — another ~2.5 GB of runtime:
-#   docker compose build --build-arg WITH_NER=true
-ARG WITH_NER=false
-
-COPY requirements.txt requirements-docling.txt requirements-ner.txt ./
-RUN pip install --no-cache-dir -r requirements.txt \
- && pip install --no-cache-dir -r requirements-docling.txt \
- && if [ "$WITH_NER" = "true" ]; then \
-        pip install --no-cache-dir -r requirements-ner.txt; \
-    fi
+# Docling + MiniLM and the key/value extraction packages are required in-container —
+# always install. Weight files are NOT baked in; mount ./models (scp onto the host).
+COPY requirements.txt requirements-docling.txt requirements-extraction.txt ./
+RUN pip install --no-cache-dir -r requirements.txt  && pip install --no-cache-dir -r requirements-docling.txt  && pip install --no-cache-dir -r requirements-extraction.txt
 
 COPY . /app/core-pipeline
 WORKDIR /app/core-pipeline
@@ -68,7 +59,7 @@ ENV PYTHONPATH=/app/core-pipeline \
     BLANK_JUNK_MODEL_DIR=models/blank-junk \
     RAPID_MODELS_DIR=models/rapidocr \
     SECTION_HEADER_MINILM_PATH=models/semantic-model \
-    MEMBER_NER_MODELS_PATH=models/ner \
+    EXTRACTION_MODELS_ROOT=models \
     API_HOST=0.0.0.0 \
     API_PORT=8001
 

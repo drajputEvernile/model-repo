@@ -62,7 +62,7 @@ before or after the pages. If it arrives late, re-run stage 7 alone.
 |---|---|
 | Database | PostgreSQL 14+ |
 | Runtime | Docker, or Python 3.12 directly (3.13+ is not supported) |
-| Optional | Azure Blob Storage for intake, Azure Document Intelligence for stage 5, Azure OpenAI for date extraction |
+| Optional | Azure Blob Storage for intake, Azure Document Intelligence for stage 5 |
 
 Every optional service is genuinely optional. When one is absent the affected
 stage degrades in a way the run records — the output says which path produced it,
@@ -168,15 +168,13 @@ Both are deliberate, current limitations rather than oversights:
   that provides authentication and TLS before exposing either port beyond the host.
   The viewer's login screen keeps a casual visitor off the page; it is not an
   access control, and the API behind it is reachable without it.
-- **Rejecting a chart for wrong-member evidence requires the optional NER layer.**
-  It is off by default because the runtime and model weights are large (~4.5 GB
-  together) and are not shipped with the code. While it is off, member verification
-  still runs and still flags charts for review — but no chart can be *rejected*
-  outright, so every chart returns accepted or needs-review.
-  [`GET /health`](docs/API.md#get-health) reports whether it is active.
-
-Enabling the NER layer:
-[`docs/API.md § The NER layer`](docs/API.md#3-the-ner-layer-gliner--optional-and-it-gates-rejection).
+- **The key/value extraction is required.** One stage right after OCR finds the member
+  name / DOB / ID, DOS, page numbers and headings that member verification, DOS and
+  sequencing read. It needs its packages (`requirements-extraction.txt`) and weights
+  (`models/gliner_low`, `layout_heron`, `kv_ranker/v002`); without them the chart fails at
+  that stage. [`GET /health`](docs/API.md#get-health) → `extraction` reports whether it can run.
+  Pages Azure never read (high-quality printed pages) have no word boxes and are not
+  extracted — see [`docs/EXTRACTION.md`](docs/EXTRACTION.md#pages-with-no-word-boxes).
 
 ---
 
@@ -186,8 +184,8 @@ Enabling the NER layer:
 python -m pytest tests/ -q
 ```
 
-253 tests, no database or cloud credentials required. A further 5 exercise the
-Azure OpenAI and NER paths and skip themselves when those are not configured.
+No database or cloud credentials required. `scripts/simulate_extraction.py` runs a prepared
+document through the extraction and every stage that uses it (needs the model weights).
 
 ---
 
@@ -197,6 +195,7 @@ Azure OpenAI and NER paths and skip themselves when those are not configured.
 |---|---|
 | [`docs/HOW_TO_RUN.md`](docs/HOW_TO_RUN.md) | **Re-run recipes** — skip OCR, `only` / `force` / batch on charts that already finished OCR |
 | [`docs/API.md`](docs/API.md) | Running both services, full API and CLI reference, troubleshooting |
+| [`docs/EXTRACTION.md`](docs/EXTRACTION.md) | The key/value extraction stage, staging, models, training |
 | [`docs/FLOW.md`](docs/FLOW.md) | What runs when — end-to-end diagrams, skip rules, resume behaviour |
 | [`docs/LOGIC.md`](docs/LOGIC.md) | How each decision is made, and exactly what it writes |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System shape, data model, the role of every file |
